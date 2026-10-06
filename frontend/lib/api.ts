@@ -7,6 +7,7 @@ export type Meeting = {
   duration_minutes: number;
   status: string;
   invite_link: string;
+  host_id?: number;
 };
 
 export type Participant = {
@@ -125,10 +126,10 @@ export function leaveMeeting(code: string, participantId: number, keepalive = fa
   });
 }
 
-export function joinMeeting(code: string, display_name: string) {
+export function joinMeeting(code: string, display_name: string, role: "host" | "participant" = "participant") {
   return request<Participant>(`/meetings/${encodeURIComponent(code)}/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ display_name }),
+    body: JSON.stringify({ display_name, role }),
   });
 }

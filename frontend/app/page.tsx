@@ -71,6 +71,7 @@ export default function Home() {
   const [joinCode, setJoinCode] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [scheduledInvite, setScheduledInvite] = useState("");
+  const [roomMessage, setRoomMessage] = useState("");
 
   async function openNewMeeting() {
     setModal("new");
@@ -104,6 +105,7 @@ export default function Home() {
       await getMeeting(code);
       const participant = await joinMeeting(code, displayName);
       sessionStorage.setItem(`meeting-participant:${code}`, String(participant.id));
+      sessionStorage.setItem(`meeting-role:${code}`, participant.role);
       window.location.href = `/meeting/${code}?name=${encodeURIComponent(displayName)}`;
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not join meeting");
@@ -147,6 +149,11 @@ export default function Home() {
   }
 
   useEffect(() => {
+    const message = sessionStorage.getItem("dashboard-message");
+    if (message) {
+      setRoomMessage(message);
+      sessionStorage.removeItem("dashboard-message");
+    }
     setToday(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }));
     // Load each list independently so one unavailable endpoint does not hide the other.
     getUpcoming().then(setUpcoming).catch(() => setUpcomingError("Upcoming meetings could not be loaded. Check that the backend is running.")).finally(() => setUpcomingLoading(false));
@@ -164,6 +171,8 @@ export default function Home() {
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900 sm:text-[34px]">Good to see you, Alex <span aria-hidden="true">👋</span></h1>
             <p className="mt-2 text-sm text-slate-500">Ready to connect with your team?</p>
           </div>
+
+          {roomMessage && <p role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{roomMessage}</p>}
 
           <div className="grid gap-4 sm:grid-cols-3">
             <ActionTile label="New Meeting" color="#FF742E" icon={<TileIcon kind="video" />} onClick={openNewMeeting} />
@@ -190,6 +199,7 @@ export default function Home() {
               const participant = participants.find((person) => person.role === "host");
               if (!participant) throw new Error("Could not find the meeting host participant");
               sessionStorage.setItem(`meeting-participant:${instantMeeting.meeting_code}`, String(participant.id));
+              sessionStorage.setItem(`meeting-role:${instantMeeting.meeting_code}`, participant.role);
               window.location.href = `/meeting/${instantMeeting.meeting_code}?name=${encodeURIComponent("Alex Morgan")}`;
             } catch (error) {
               setActionError(error instanceof Error ? error.message : "Could not join meeting");

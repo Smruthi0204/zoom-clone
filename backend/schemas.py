@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -55,6 +55,8 @@ class MeetingResponse(BaseModel):
 
 class JoinMeetingRequest(BaseModel):
     display_name: str = Field(min_length=1)
+    # The meeting creator uses this when starting their scheduled meeting.
+    role: Literal["host", "participant"] = "participant"
 
     @field_validator("display_name")
     @classmethod

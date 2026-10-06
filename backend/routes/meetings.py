@@ -152,7 +152,8 @@ def join_meeting(
     participant = Participant(
         meeting_id=meeting.id,
         display_name=request.display_name,
-        role="participant",
+        # Only the meeting owner can start as host; invite joins stay participants.
+        role="host" if request.role == "host" and meeting.host_id == 1 else "participant",
         last_seen_at=utc_now(),
     )
     db.add(participant)

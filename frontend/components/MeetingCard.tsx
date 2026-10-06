@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Meeting } from "@/lib/api";
+import { joinMeeting } from "@/lib/api";
 
 function formatMeetingCode(code: string) {
   const digits = code.replace(/\D/g, "");
@@ -11,6 +12,8 @@ function formatMeetingCode(code: string) {
 export default function MeetingCard({ meeting }: { meeting: Meeting }) {
   const [copied, setCopied] = useState(false);
   const [dateLabel, setDateLabel] = useState("");
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
 
   // Format after mount so the browser's local timezone is used without a hydration mismatch.
   useEffect(() => {
@@ -24,6 +27,20 @@ export default function MeetingCard({ meeting }: { meeting: Meeting }) {
     await navigator.clipboard.writeText(meeting.invite_link);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  async function startMeeting() {
+    setStarting(true);
+    setStartError("");
+    try {
+      const host = await joinMeeting(meeting.meeting_code, "Alex Morgan", "host");
+      sessionStorage.setItem(`meeting-participant:${meeting.meeting_code}`, String(host.id));
+      sessionStorage.setItem(`meeting-role:${meeting.meeting_code}`, host.role);
+      window.location.href = `/meeting/${meeting.meeting_code}?name=${encodeURIComponent(host.display_name)}`;
+    } catch (error) {
+      setStartError(error instanceof Error ? error.message : "Could not start meeting");
+      setStarting(false);
+    }
   }
 
   return (
@@ -40,11 +57,12 @@ export default function MeetingCard({ meeting }: { meeting: Meeting }) {
           <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Meeting ID</p>
           <p className="mt-1 text-sm font-medium tracking-wide text-slate-700">{formatMeetingCode(meeting.meeting_code)}</p>
         </div>
-        <button type="button" onClick={copyInvite} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-[#0B5CFF] hover:bg-[#f3f7ff]">
+        <div className="flex items-center gap-1"><button type="button" onClick={copyInvite} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-[#0B5CFF] hover:bg-[#f3f7ff]">
           <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="7" y="7" width="9" height="10" rx="2" /><path d="M12 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" /></svg>
           {copied ? "Copied" : "Copy invite"}
-        </button>
+        </button>{meeting.status === "scheduled" && meeting.host_id === 1 && <button type="button" disabled={starting} onClick={startMeeting} className="rounded-lg bg-[#0B5CFF] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">{starting ? "Starting…" : "Start"}</button>}</div>
       </div>
+      {startError && <p role="alert" className="mt-2 text-xs text-red-600">{startError}</p>}
     </article>
   );
 }

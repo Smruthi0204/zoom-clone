@@ -49,11 +49,56 @@ async def meeting_chat(websocket: WebSocket, code: str, participant_id: int):
         await websocket.close(code=1008)
         return
 
-    await connection_manager.connect(code, participant_id, websocket)
+    connected = False
     try:
+        peers = await connection_manager.connect(code, participant_id, websocket)
+        connected = True
+        await websocket.send_json({"type": "peers", "peers": peers})
+        await connection_manager.broadcast(
+            code,
+            {"type": "peer-joined", "participant_id": participant_id},
+            exclude_id=participant_id,
+        )
         while True:
             incoming = await websocket.receive_json()
-            if not isinstance(incoming, dict) or incoming.get("type") != "chat":
+            if not isinstance(incoming, dict):
+                continue
+
+            message_type = incoming.get("type")
+            if message_type == "mute-all":
+                if participant.role == "host":
+                    await connection_manager.broadcast(code, {"type": "mute-all"}, exclude_id=participant.id)
+                continue
+
+            if message_type == "remove":
+                target_id = incoming.get("target_id")
+                if participant.role != "host" or not isinstance(target_id, int) or target_id == participant.id:
+                    continue
+                target = db.query(Participant).filter(
+                    Participant.id == target_id,
+                    Participant.meeting_id == meeting.id,
+                    Participant.left_at.is_(None),
+                ).first()
+                if target is None:
+                    continue
+                await connection_manager.send_to(code, target_id, {"type": "removed"})
+                target.left_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                db.commit()
+                await connection_manager.close_participant(code, target_id)
+                # The closed socket broadcasts peer-left from its disconnect handler.
+                continue
+
+            if message_type in {"offer", "answer", "ice-candidate"}:
+                target_id = incoming.get("target_id")
+                if isinstance(target_id, int):
+                    await connection_manager.send_to(code, target_id, {
+                        "type": message_type,
+                        "from_id": participant.id,
+                        "payload": incoming.get("payload"),
+                    })
+                continue
+
+            if message_type != "chat":
                 continue
             text = incoming.get("text")
             if not isinstance(text, str) or not text.strip():
@@ -80,7 +125,13 @@ async def meeting_chat(websocket: WebSocket, code: str, participant_id: int):
     except WebSocketDisconnect:
         pass
     finally:
-        await connection_manager.disconnect(code, participant_id, websocket)
-        participant.left_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        db.commit()
+        if connected:
+            await connection_manager.disconnect(code, participant_id, websocket)
+            await connection_manager.broadcast(
+                code,
+                {"type": "peer-left", "participant_id": participant_id},
+                exclude_id=participant_id,
+            )
+            participant.left_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.commit()
         db.close()
