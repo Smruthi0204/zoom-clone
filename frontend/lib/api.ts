@@ -18,6 +18,14 @@ export type Participant = {
   left_at: string | null;
 };
 
+export type ChatMessage = {
+  id: number;
+  participant_id: number;
+  sender_name: string;
+  text: string;
+  sent_at: string;
+};
+
 type MeetingInput = {
   title: string;
   description: string;
@@ -86,6 +94,18 @@ export function getMeeting(code: string) {
 
 export function getParticipants(code: string) {
   return request<Participant[]>(`/meetings/${encodeURIComponent(code)}/participants`);
+}
+
+export function getMeetingMessages(code: string) {
+  return request<ChatMessage[]>(`/meetings/${encodeURIComponent(code)}/messages`);
+}
+
+export function getMeetingWebSocketUrl(code: string, participantId: number) {
+  const url = new URL(API_URL);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = `/ws/meetings/${encodeURIComponent(code)}`;
+  url.searchParams.set("participant_id", String(participantId));
+  return url.toString();
 }
 
 export function heartbeatMeeting(code: string, participantId: number) {

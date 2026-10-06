@@ -83,3 +83,16 @@ class ParticipantResponse(BaseModel):
     @classmethod
     def normalize_times(cls, value):
         return as_utc(value)
+
+
+class ChatMessageResponse(BaseModel):
+    id: int
+    participant_id: int
+    sender_name: str
+    text: str
+    sent_at: datetime
+
+    @field_validator("sent_at", mode="before")
+    @classmethod
+    def normalize_sent_at(cls, value):
+        return as_utc(value)

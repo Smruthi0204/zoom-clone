@@ -51,6 +51,7 @@ class Meeting(Base):
         back_populates="meeting",
         cascade="all, delete-orphan",
     )
+    messages = relationship("Message", back_populates="meeting", cascade="all, delete-orphan")
 
 
 class Participant(Base):
@@ -71,3 +72,17 @@ class Participant(Base):
     left_at = Column(DateTime(timezone=True), nullable=True)
 
     meeting = relationship("Meeting", back_populates="participants")
+    messages = relationship("Message", back_populates="participant", cascade="all, delete-orphan")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False)
+    participant_id = Column(Integer, ForeignKey("participants.id"), nullable=False)
+    text = Column(Text, nullable=False)
+    sent_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    meeting = relationship("Meeting", back_populates="messages")
+    participant = relationship("Participant", back_populates="messages")

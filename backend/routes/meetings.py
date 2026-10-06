@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Meeting, Participant, User
+from models import Meeting, Message, Participant, User
 from schemas import (
     JoinMeetingRequest,
+    ChatMessageResponse,
     MeetingCreate,
     MeetingResponse,
     ParticipantIdRequest,
@@ -221,3 +222,27 @@ def get_meeting_participants(code: str, db: Session = Depends(get_db)):
         .order_by(Participant.joined_at.asc(), Participant.id.asc())
         .all()
     )
+
+
+@router.get("/{code}/messages", response_model=list[ChatMessageResponse])
+def get_meeting_messages(code: str, db: Session = Depends(get_db)):
+    meeting = db.query(Meeting).filter(Meeting.meeting_code == code).first()
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    messages = (
+        db.query(Message)
+        .filter(Message.meeting_id == meeting.id)
+        .order_by(Message.sent_at.asc(), Message.id.asc())
+        .all()
+    )
+    return [
+        {
+            "id": message.id,
+            "participant_id": message.participant_id,
+            "sender_name": message.participant.display_name,
+            "text": message.text,
+            "sent_at": message.sent_at,
+        }
+        for message in messages
+    ]
