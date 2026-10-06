@@ -88,6 +88,14 @@ export function getParticipants(code: string) {
   return request<Participant[]>(`/meetings/${encodeURIComponent(code)}/participants`);
 }
 
+export function heartbeatMeeting(code: string, participantId: number) {
+  return request<{ ok: boolean }>(`/meetings/${encodeURIComponent(code)}/heartbeat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participant_id: participantId }),
+  });
+}
+
 export function leaveMeeting(code: string, participantId: number, keepalive = false) {
   return request<Participant>(`/meetings/${encodeURIComponent(code)}/leave`, {
     method: "POST",

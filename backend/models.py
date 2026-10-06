@@ -67,6 +67,7 @@ class Participant(Base):
     display_name = Column(String, nullable=False)
     role = Column(String, nullable=False, default="participant")
     joined_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     left_at = Column(DateTime(timezone=True), nullable=True)
 
     meeting = relationship("Meeting", back_populates="participants")

@@ -65,7 +65,7 @@ class JoinMeetingRequest(BaseModel):
         return value
 
 
-class LeaveMeetingRequest(BaseModel):
+class ParticipantIdRequest(BaseModel):
     participant_id: int
 
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { getMeeting, getParticipants, leaveMeeting, type Meeting, type Participant } from "@/lib/api";
+import { getMeeting, getParticipants, heartbeatMeeting, leaveMeeting, type Meeting, type Participant } from "@/lib/api";
 
 function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
@@ -22,14 +22,15 @@ function CameraIcon({ crossed }: { crossed: boolean }) {
   return <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="3" /><path d="m15 10 6-3v10l-6-3" />{crossed && <path d="m4 4 16 16" />}</svg>;
 }
 
-function ParticipantTile({ name, local, videoRef, videoOff }: {
+function ParticipantTile({ name, local, videoRef, videoOff, className }: {
   name: string;
   local?: boolean;
   videoRef?: RefObject<HTMLVideoElement | null>;
   videoOff?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="relative flex min-h-0 items-center justify-center overflow-hidden rounded-xl bg-[#292929]">
+    <div className={`relative flex h-full w-full min-h-0 items-center justify-center overflow-hidden rounded-xl bg-[#292929] ${className ?? ""}`}>
       {local && !videoOff ? <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" /> : (
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#414141] text-2xl font-semibold text-white">{initials(name)}</div>
       )}
@@ -38,9 +39,16 @@ function ParticipantTile({ name, local, videoRef, videoOff }: {
   );
 }
 
+function ScreenIcon() {
+  return <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M12 17v4m-4 0h8" /></svg>;
+}
+
 export default function MeetingRoom({ code, displayName }: { code: string; displayName: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const screenVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const heartbeatTimerRef = useRef<number | null>(null);
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [participantId, setParticipantId] = useState<number | null>(null);
@@ -50,6 +58,14 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [showParticipants, setShowParticipants] = useState(false);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+
+  function stopHeartbeat() {
+    if (heartbeatTimerRef.current !== null) {
+      window.clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
+  }
 
   useEffect(() => {
     const savedId = Number(sessionStorage.getItem(`meeting-participant:${code}`));
@@ -74,6 +90,10 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     });
     refreshParticipants();
     const refreshTimer = window.setInterval(refreshParticipants, 5000);
+    heartbeatMeeting(code, participantId).catch(() => {});
+    heartbeatTimerRef.current = window.setInterval(() => {
+      heartbeatMeeting(code, participantId).catch(() => {});
+    }, 5000);
 
     // Start the camera and microphone once when the meeting room opens.
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -104,6 +124,7 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     return () => {
       active = false;
       window.clearInterval(refreshTimer);
+      stopHeartbeat();
       // Stop tracks on navigation so the camera light turns off.
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -114,7 +135,8 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     if (!participantId) return;
     const storageKey = `meeting-participant:${code}`;
     const handlePageHide = () => {
-      // keepalive lets the leave request finish while the page is closing.
+      stopHeartbeat();
+      // Keepalive with JSON lets FastAPI accept the leave request during page close.
       leaveMeeting(code, participantId, true).catch(() => {});
       sessionStorage.removeItem(storageKey);
     };
@@ -128,6 +150,18 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
       videoRef.current.srcObject = streamRef.current;
     }
   }, [videoOff]);
+
+  useEffect(() => {
+    if (screenVideoRef.current && screenStream) {
+      screenVideoRef.current.srcObject = screenStream;
+    }
+  }, [screenStream]);
+
+  useEffect(() => () => {
+    // Screen capture must stop even if the user leaves by navigating away.
+    screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+    screenStreamRef.current = null;
+  }, []);
 
   useEffect(() => {
     const startedAt = Date.now();
@@ -149,10 +183,34 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     setVideoOff(!videoOff);
   }
 
+  function stopScreenShare() {
+    screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+    screenStreamRef.current = null;
+    setScreenStream(null);
+  }
+
+  async function toggleScreenShare() {
+    if (screenStreamRef.current) {
+      stopScreenShare();
+      return;
+    }
+
+    try {
+      const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      screen.getVideoTracks()[0]?.addEventListener("ended", stopScreenShare, { once: true });
+      screenStreamRef.current = screen;
+      setScreenStream(screen);
+    } catch {
+      // Closing the picker or denying access should leave the meeting unchanged.
+    }
+  }
+
   async function handleLeave() {
+    stopHeartbeat();
     if (participantId) await leaveMeeting(code, participantId).catch(() => {});
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    stopScreenShare();
     sessionStorage.removeItem(`meeting-participant:${code}`);
     window.location.href = "/";
   }
@@ -171,10 +229,16 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
         <section className="flex min-w-0 flex-1 flex-col items-center justify-center p-4 sm:p-8">
           {error ? <p role="alert" className="text-center text-sm text-red-300">{error}</p> : <>
             {notice && <p role="status" className="mb-4 rounded-lg bg-[#333] px-4 py-2 text-center text-xs text-white/70">{notice}</p>}
-            <div className="grid h-full max-h-[720px] w-full max-w-6xl grid-cols-1 grid-rows-3 gap-3 md:grid-cols-2 md:grid-rows-2 xl:grid-cols-3 xl:grid-rows-1">
+            {screenStream ? <div className="grid h-full max-h-[720px] w-full max-w-6xl grid-rows-[minmax(0,1fr)_auto] gap-3">
+              <div className="relative min-h-0 overflow-hidden rounded-xl bg-black"><video ref={screenVideoRef} autoPlay playsInline className="h-full w-full object-contain" /><span className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-sm">{displayName}&apos;s screen</span></div>
+              <div className="flex h-[clamp(100px,22vh,180px)] justify-center gap-3 overflow-x-auto">
+                <div className="aspect-video h-full shrink-0"><ParticipantTile name={displayName || "You"} local videoRef={videoRef} videoOff={videoOff} /></div>
+                {otherPeople.map((person) => <div key={person.id} className="aspect-video h-full shrink-0"><ParticipantTile name={person.display_name} /></div>)}
+              </div>
+            </div> : <div className="grid h-full max-h-[720px] w-full max-w-6xl auto-rows-fr grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               <ParticipantTile name={displayName || "You"} local videoRef={videoRef} videoOff={videoOff} />
               {otherPeople.map((person) => <ParticipantTile key={person.id} name={person.display_name} />)}
-            </div>
+            </div>}
           </>}
         </section>
 
@@ -189,7 +253,7 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
         <button type="button" onClick={toggleVideo} className={`flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white hover:bg-white/10 sm:min-w-[76px] sm:text-xs ${videoOff ? "text-red-300" : ""}`}><span className={`relative rounded-lg p-2 ${videoOff ? "bg-red-600" : "bg-[#3a3a3a]"}`}><CameraIcon crossed={videoOff} />{videoOff && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-400 ring-2 ring-[#202020]" />}</span>{videoOff ? "Start Video" : "Stop Video"}</button>
         <button type="button" onClick={() => setShowParticipants(!showParticipants)} className={`flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white hover:bg-white/10 sm:min-w-[76px] sm:text-xs`}><span className="rounded-lg bg-[#3a3a3a] p-2"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="9" cy="8" r="3" /><path d="M3 20v-2a6 6 0 0 1 12 0v2m2-9a3 3 0 1 0 0-6m1 10a5 5 0 0 1 3 5" /></svg></span>Participants</button>
         <button type="button" className="flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white hover:bg-white/10 sm:min-w-[76px] sm:text-xs"><span className="rounded-lg bg-[#3a3a3a] p-2"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z" /></svg></span>Chat</button>
-        <button type="button" className="flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white hover:bg-white/10 sm:min-w-[76px] sm:text-xs"><span className="rounded-lg bg-[#3a3a3a] p-2"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="4" y="4" width="16" height="12" rx="2" /><path d="M12 16v4m-4 0h8M8 10l3-3 2 2 3-3" /></svg></span>Share Screen</button>
+        <button type="button" onClick={toggleScreenShare} className={`flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] hover:bg-white/10 sm:min-w-[76px] sm:text-xs ${screenStream ? "text-green-300" : "text-white"}`}><span className={`rounded-lg p-2 ${screenStream ? "bg-green-600" : "bg-[#3a3a3a]"}`}><ScreenIcon /></span>{screenStream ? "Stop Share" : "Share Screen"}</button>
         <button type="button" onClick={handleLeave} className="ml-1 rounded-lg bg-[#d93025] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#b9251c] sm:ml-4 sm:px-6 sm:text-sm">Leave</button>
       </footer>
     </main>

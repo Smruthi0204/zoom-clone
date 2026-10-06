@@ -1,6 +1,6 @@
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,9 +9,9 @@ from database import get_db
 from models import Meeting, Participant, User
 from schemas import (
     JoinMeetingRequest,
-    LeaveMeetingRequest,
     MeetingCreate,
     MeetingResponse,
+    ParticipantIdRequest,
     ParticipantResponse,
 )
 
@@ -98,6 +98,7 @@ def create_instant_meeting(db: Session = Depends(get_db)):
             meeting_id=meeting.id,
             display_name=host.name,
             role="host",
+            last_seen_at=utc_now(),
         )
     )
     db.commit()
@@ -151,6 +152,7 @@ def join_meeting(
         meeting_id=meeting.id,
         display_name=request.display_name,
         role="participant",
+        last_seen_at=utc_now(),
     )
     db.add(participant)
     db.commit()
@@ -158,10 +160,30 @@ def join_meeting(
     return participant
 
 
+@router.post("/{code}/heartbeat")
+def meeting_heartbeat(
+    code: str,
+    request: ParticipantIdRequest,
+    db: Session = Depends(get_db),
+):
+    participant = (
+        db.query(Participant)
+        .join(Meeting)
+        .filter(Meeting.meeting_code == code, Participant.id == request.participant_id)
+        .first()
+    )
+    if participant is None:
+        raise HTTPException(status_code=404, detail="Participant not found")
+
+    participant.last_seen_at = utc_now()
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/{code}/leave", response_model=ParticipantResponse)
 def leave_meeting(
     code: str,
-    request: LeaveMeetingRequest,
+    request: ParticipantIdRequest,
     db: Session = Depends(get_db),
 ):
     meeting = db.query(Meeting).filter(Meeting.meeting_code == code).first()
@@ -188,9 +210,14 @@ def get_meeting_participants(code: str, db: Session = Depends(get_db)):
     meeting = db.query(Meeting).filter(Meeting.meeting_code == code).first()
     if meeting is None:
         raise HTTPException(status_code=404, detail="Meeting not found")
+    active_since = utc_now() - timedelta(seconds=15)
     return (
         db.query(Participant)
-        .filter(Participant.meeting_id == meeting.id, Participant.left_at.is_(None))
+        .filter(
+            Participant.meeting_id == meeting.id,
+            Participant.left_at.is_(None),
+            Participant.last_seen_at >= active_since,
+        )
         .order_by(Participant.joined_at.asc(), Participant.id.asc())
         .all()
     )

@@ -66,16 +66,22 @@ def seed_if_empty():
                         meeting_id=meeting.id,
                         display_name=host.name,
                         role="host",
+                        left_at=now,
+                        last_seen_at=now,
                     ),
                     Participant(
                         meeting_id=meeting.id,
                         display_name="Jordan Lee",
                         role="participant",
+                        left_at=now,
+                        last_seen_at=now,
                     ),
                     Participant(
                         meeting_id=meeting.id,
                         display_name="Taylor Kim",
                         role="participant",
+                        left_at=now,
+                        last_seen_at=now,
                     ),
                 ]
             )
