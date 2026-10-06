@@ -6,7 +6,7 @@ import MeetingCard from "@/components/MeetingCard";
 import Modal from "@/components/Modal";
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
-import { createInstantMeeting, getMeeting, getRecent, getUpcoming, joinMeeting, scheduleMeeting, type Meeting } from "@/lib/api";
+import { createInstantMeeting, getMeeting, getParticipants, getRecent, getUpcoming, joinMeeting, scheduleMeeting, type Meeting } from "@/lib/api";
 
 function TileIcon({ kind }: { kind: "video" | "join" | "calendar" }) {
   if (kind === "video") {
@@ -102,7 +102,8 @@ export default function Home() {
     setActionError("");
     try {
       await getMeeting(code);
-      await joinMeeting(code, displayName);
+      const participant = await joinMeeting(code, displayName);
+      sessionStorage.setItem(`meeting-participant:${code}`, String(participant.id));
       window.location.href = `/meeting/${code}?name=${encodeURIComponent(displayName)}`;
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not join meeting");
@@ -181,7 +182,20 @@ export default function Home() {
         {busy ? <p className="text-sm text-slate-500">Creating your meeting…</p> : actionError ? <p role="alert" className="text-sm text-red-600">{actionError}</p> : instantMeeting && <div>
           <p className="text-sm text-slate-500">Meeting ID</p><p className="mt-1 text-2xl font-bold tracking-wider">{instantMeeting.meeting_code.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3")}</p>
           <p className="mt-5 text-sm font-medium text-slate-700">Invite link</p><div className="mt-2 flex gap-2"><input readOnly value={instantMeeting.invite_link} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"/><button type="button" onClick={() => navigator.clipboard.writeText(instantMeeting.invite_link)} className="rounded-lg border px-3 text-sm font-semibold text-[#0B5CFF]">Copy</button></div>
-          <button type="button" onClick={() => window.location.href = `/meeting/${instantMeeting.meeting_code}`} className="mt-6 w-full rounded-xl bg-[#0B5CFF] px-4 py-3 font-semibold text-white">Start meeting</button>
+          <button type="button" onClick={async () => {
+            setBusy(true);
+            try {
+              // Instant meetings already add their host as a participant.
+              const participants = await getParticipants(instantMeeting.meeting_code);
+              const participant = participants.find((person) => person.role === "host");
+              if (!participant) throw new Error("Could not find the meeting host participant");
+              sessionStorage.setItem(`meeting-participant:${instantMeeting.meeting_code}`, String(participant.id));
+              window.location.href = `/meeting/${instantMeeting.meeting_code}?name=${encodeURIComponent("Alex Morgan")}`;
+            } catch (error) {
+              setActionError(error instanceof Error ? error.message : "Could not join meeting");
+              setBusy(false);
+            }
+          }} className="mt-6 w-full rounded-xl bg-[#0B5CFF] px-4 py-3 font-semibold text-white">Start meeting</button>
         </div>}
       </Modal>}
 

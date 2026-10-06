@@ -65,6 +65,10 @@ class JoinMeetingRequest(BaseModel):
         return value
 
 
+class LeaveMeetingRequest(BaseModel):
+    participant_id: int
+
+
 class ParticipantResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

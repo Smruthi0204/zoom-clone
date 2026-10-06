@@ -9,6 +9,7 @@ from database import get_db
 from models import Meeting, Participant, User
 from schemas import (
     JoinMeetingRequest,
+    LeaveMeetingRequest,
     MeetingCreate,
     MeetingResponse,
     ParticipantResponse,
@@ -157,6 +158,31 @@ def join_meeting(
     return participant
 
 
+@router.post("/{code}/leave", response_model=ParticipantResponse)
+def leave_meeting(
+    code: str,
+    request: LeaveMeetingRequest,
+    db: Session = Depends(get_db),
+):
+    meeting = db.query(Meeting).filter(Meeting.meeting_code == code).first()
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    participant = (
+        db.query(Participant)
+        .filter(Participant.id == request.participant_id, Participant.meeting_id == meeting.id)
+        .first()
+    )
+    if participant is None:
+        raise HTTPException(status_code=404, detail="Participant not found")
+
+    if participant.left_at is None:
+        participant.left_at = utc_now()
+        db.commit()
+        db.refresh(participant)
+    return participant
+
+
 @router.get("/{code}/participants", response_model=list[ParticipantResponse])
 def get_meeting_participants(code: str, db: Session = Depends(get_db)):
     meeting = db.query(Meeting).filter(Meeting.meeting_code == code).first()
@@ -164,7 +190,7 @@ def get_meeting_participants(code: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Meeting not found")
     return (
         db.query(Participant)
-        .filter(Participant.meeting_id == meeting.id)
+        .filter(Participant.meeting_id == meeting.id, Participant.left_at.is_(None))
         .order_by(Participant.joined_at.asc(), Participant.id.asc())
         .all()
     )

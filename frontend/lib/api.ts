@@ -9,6 +9,15 @@ export type Meeting = {
   invite_link: string;
 };
 
+export type Participant = {
+  id: number;
+  meeting_id: number;
+  display_name: string;
+  role: string;
+  joined_at: string;
+  left_at: string | null;
+};
+
 type MeetingInput = {
   title: string;
   description: string;
@@ -75,8 +84,21 @@ export function getMeeting(code: string) {
   });
 }
 
+export function getParticipants(code: string) {
+  return request<Participant[]>(`/meetings/${encodeURIComponent(code)}/participants`);
+}
+
+export function leaveMeeting(code: string, participantId: number, keepalive = false) {
+  return request<Participant>(`/meetings/${encodeURIComponent(code)}/leave`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participant_id: participantId }),
+    keepalive,
+  });
+}
+
 export function joinMeeting(code: string, display_name: string) {
-  return request<Meeting>(`/meetings/${encodeURIComponent(code)}/join`, {
+  return request<Participant>(`/meetings/${encodeURIComponent(code)}/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ display_name }),

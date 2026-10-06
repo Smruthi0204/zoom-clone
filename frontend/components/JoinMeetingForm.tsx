@@ -14,7 +14,8 @@ export default function JoinMeetingForm({ code, initialName }: { code: string; i
     setError("");
     try {
       await getMeeting(code);
-      await joinMeeting(code, name);
+      const participant = await joinMeeting(code, name);
+      sessionStorage.setItem(`meeting-participant:${code}`, String(participant.id));
       window.location.href = `/meeting/${code}?name=${encodeURIComponent(name)}`;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not join meeting");

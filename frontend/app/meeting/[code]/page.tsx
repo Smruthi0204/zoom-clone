@@ -1,6 +1,10 @@
 import MeetingRoom from "@/components/MeetingRoom";
 
-export default async function MeetingPage({ params }: { params: Promise<{ code: string }> }) {
+export default async function MeetingPage({ params, searchParams }: {
+  params: Promise<{ code: string }>;
+  searchParams: Promise<{ name?: string | string[] }>;
+}) {
   const { code } = await params;
-  return <MeetingRoom code={code} />;
+  const { name } = await searchParams;
+  return <MeetingRoom code={code} displayName={typeof name === "string" ? name : "You"} />;
 }
