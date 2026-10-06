@@ -98,18 +98,6 @@ async def meeting_chat(websocket: WebSocket, code: str, participant_id: int):
                     })
                 continue
 
-            if message_type == "reaction":
-                emoji = incoming.get("emoji")
-                if isinstance(emoji, str) and emoji in {"👍", "👏", "❤️", "😂", "😮", "🎉"}:
-                    # Reactions are temporary room events, so they are not stored.
-                    await connection_manager.broadcast(code, {
-                        "type": "reaction",
-                        "participant_id": participant.id,
-                        "sender_name": participant.display_name,
-                        "emoji": emoji,
-                    })
-                continue
-
             if message_type != "chat":
                 continue
             text = incoming.get("text")

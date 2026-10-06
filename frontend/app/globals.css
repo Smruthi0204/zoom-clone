@@ -44,11 +44,3 @@ body {
 }
 
 button, a, input, textarea, select { outline-color: var(--zoom-blue); }
-
-@keyframes reaction-float {
-  0% { opacity: 0; transform: translate(-50%, 18px) scale(0.75); }
-  15% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -100px) scale(1.08); }
-}
-
-.reaction-float { animation: reaction-float 2s ease-out forwards; }

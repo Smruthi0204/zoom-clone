@@ -2,9 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { getMeeting, getMeetingMessages, getParticipants, heartbeatMeeting, leaveMeeting, type ChatMessage, type Meeting, type Participant } from "@/lib/api";
-import useWebRTC, { type ReactionEvent } from "@/hooks/useWebRTC";
-
-const reactionEmojis = ["👍", "👏", "❤️", "😂", "😮", "🎉"];
+import useWebRTC from "@/hooks/useWebRTC";
 
 function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "?";
@@ -25,14 +23,13 @@ function CameraIcon({ crossed }: { crossed: boolean }) {
   return <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="3" /><path d="m15 10 6-3v10l-6-3" />{crossed && <path d="m4 4 16 16" />}</svg>;
 }
 
-function ParticipantTile({ name, local, videoRef, videoOff, remoteStream, micOff, reactions, className }: {
+function ParticipantTile({ name, local, videoRef, videoOff, remoteStream, micOff, className }: {
   name: string;
   local?: boolean;
   videoRef?: RefObject<HTMLVideoElement | null>;
   videoOff?: boolean;
   remoteStream?: MediaStream;
   micOff?: boolean;
-  reactions?: ReactionEvent[];
   className?: string;
 }) {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -51,7 +48,6 @@ function ParticipantTile({ name, local, videoRef, videoOff, remoteStream, micOff
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#414141] text-2xl font-semibold text-white">{initials(name)}</div>
       )}
       {micOff && <span className="absolute right-3 top-3 rounded bg-black/55 p-1.5 text-red-400" aria-label="Microphone off"><MicIcon crossed /></span>}
-      {reactions?.map((reaction) => <div key={reaction.id} className="reaction-float absolute bottom-1/3 left-1/2 z-20 flex flex-col items-center drop-shadow-lg"><span className="text-5xl">{reaction.emoji}</span><span className="mt-1 rounded-full bg-black/70 px-2 py-0.5 text-xs text-white">{reaction.sender_name}</span></div>)}
       <div className="absolute bottom-3 left-3 rounded bg-black/55 px-2 py-1 text-xs text-white">{name}{local ? " (You)" : ""}</div>
     </div>
   );
@@ -67,7 +63,6 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   const streamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const heartbeatTimerRef = useRef<number | null>(null);
-  const reactionPickerRef = useRef<HTMLDivElement>(null);
   const muteAllRef = useRef(false);
   const chatOpenRef = useRef(false);
   const seenChatIdsRef = useRef(new Set<number>());
@@ -87,8 +82,7 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   const [chatError, setChatError] = useState("");
   const [unread, setUnread] = useState(0);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [reactionOpen, setReactionOpen] = useState(false);
-  const { remoteStreams, peerIds, chatMessages: incomingMessages, reactions, connected: socketConnected, muteAllVersion, removedVersion, sendChat: sendLiveChat, sendReaction, sendModeration, close: closeWebRTC } = useWebRTC(
+  const { remoteStreams, peerIds, chatMessages: incomingMessages, connected: socketConnected, muteAllVersion, removedVersion, sendChat: sendLiveChat, sendModeration, close: closeWebRTC } = useWebRTC(
     code, participantId, localStream, screenStream?.getVideoTracks()[0] ?? null,
   );
 
@@ -201,15 +195,6 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     chatOpenRef.current = sidePanel === "chat";
     if (sidePanel === "chat") setUnread(0);
   }, [sidePanel]);
-
-  useEffect(() => {
-    if (!reactionOpen) return;
-    function closeOnOutsideClick(event: PointerEvent) {
-      if (!reactionPickerRef.current?.contains(event.target as Node)) setReactionOpen(false);
-    }
-    document.addEventListener("pointerdown", closeOnOutsideClick);
-    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
-  }, [reactionOpen]);
 
   useEffect(() => {
     if (sidePanel !== "chat") return;
@@ -335,7 +320,7 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     <main className="flex h-screen min-h-[560px] flex-col overflow-hidden bg-zoom-room text-white">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-5 sm:px-8">
         <div className="flex min-w-0 items-center gap-2.5"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">◆</span><div className="min-w-0"><h1 className="truncate text-sm font-semibold sm:text-base">{error ? "Meeting unavailable" : meeting?.title ?? "Joining meeting…"}</h1><p className="mt-0.5 text-[11px] text-white/50">Meeting ID: {code.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3")}</p></div></div>
-        <div className="flex items-center gap-2"><button type="button" className="rounded-md px-3 py-1.5 text-xs text-white/75 hover:bg-zoom-room-tile">View</button><div className="rounded-md bg-black/30 px-3 py-1.5 font-mono text-xs tabular-nums text-white/80">{formatTime(elapsed)}</div></div>
+        <div className="rounded-md bg-black/30 px-3 py-1.5 font-mono text-xs tabular-nums text-white/80">{formatTime(elapsed)}</div>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -345,12 +330,12 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
             {screenStream ? <div className="grid h-full max-h-[720px] w-full max-w-6xl grid-rows-[minmax(0,1fr)_auto] gap-3">
               <div className="relative min-h-0 overflow-hidden rounded-xl bg-black"><video ref={screenVideoRef} autoPlay playsInline className="h-full w-full object-contain" /><span className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-sm">{displayName}&apos;s screen</span></div>
               <div className="flex h-[clamp(100px,22vh,180px)] justify-center gap-3 overflow-x-auto">
-                <div className="aspect-video h-full shrink-0"><ParticipantTile name={displayName || "You"} local videoRef={videoRef} videoOff={videoOff} micOff={muted} reactions={reactions.filter((reaction) => reaction.participant_id === participantId)} className="ring-2 ring-emerald-400" /></div>
-                {otherPeople.map((person) => <div key={person.id} className="aspect-video h-full shrink-0"><ParticipantTile name={person.display_name} remoteStream={remoteStreams.get(person.id)} reactions={reactions.filter((reaction) => reaction.participant_id === person.id)} /></div>)}
+                <div className="aspect-video h-full shrink-0"><ParticipantTile name={displayName || "You"} local videoRef={videoRef} videoOff={videoOff} micOff={muted} className="ring-2 ring-emerald-400" /></div>
+                {otherPeople.map((person) => <div key={person.id} className="aspect-video h-full shrink-0"><ParticipantTile name={person.display_name} remoteStream={remoteStreams.get(person.id)} /></div>)}
               </div>
             </div> : <div className="grid h-full max-h-[720px] w-full max-w-6xl auto-rows-fr grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <ParticipantTile name={displayName || "You"} local videoRef={videoRef} videoOff={videoOff} micOff={muted} reactions={reactions.filter((reaction) => reaction.participant_id === participantId)} className="ring-2 ring-emerald-400" />
-              {otherPeople.map((person) => <ParticipantTile key={person.id} name={person.display_name} remoteStream={remoteStreams.get(person.id)} reactions={reactions.filter((reaction) => reaction.participant_id === person.id)} />)}
+              <ParticipantTile name={displayName || "You"} local videoRef={videoRef} videoOff={videoOff} micOff={muted} className="ring-2 ring-emerald-400" />
+              {otherPeople.map((person) => <ParticipantTile key={person.id} name={person.display_name} remoteStream={remoteStreams.get(person.id)} />)}
             </div>}
           </>}
         </section>
@@ -380,15 +365,13 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
         </aside>}
       </div>
 
-      <footer className="flex min-h-[84px] shrink-0 items-center justify-center gap-1 overflow-x-auto border-t border-white/10 bg-zoom-room px-3 sm:gap-2 sm:px-6">
+      <footer className="flex min-h-[84px] shrink-0 items-center gap-1 overflow-x-auto border-t border-white/10 bg-zoom-room px-3 sm:gap-2 sm:px-6">
+        <div className="flex flex-1 items-center justify-center gap-1 sm:gap-2">
         <button type="button" onClick={toggleMute} className={`flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:text-xs ${muted ? "text-red-300" : ""}`}><span className={`relative p-1.5 ${muted ? "text-red-400" : ""}`}><MicIcon crossed={muted} />{muted && <span className="absolute inset-1.5 rounded-sm border-r-2 border-red-500" />}</span>{muted ? "Unmute" : "Mute"}</button>
         <button type="button" onClick={toggleVideo} className={`flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:text-xs ${videoOff ? "text-red-300" : ""}`}><span className={`relative p-1.5 ${videoOff ? "text-red-400" : ""}`}><CameraIcon crossed={videoOff} />{videoOff && <span className="absolute inset-1.5 rounded-sm border-r-2 border-red-500" />}</span>{videoOff ? "Start Video" : "Stop Video"}</button>
         <button type="button" onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} className="relative flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:text-xs"><span className="p-1.5"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="9" cy="8" r="3" /><path d="M3 20v-2a6 6 0 0 1 12 0v2m2-9a3 3 0 1 0 0-6m1 10a5 5 0 0 1 3 5" /></svg><span className="absolute right-2 top-1 rounded-full bg-[#484848] px-1 text-[9px]">{panelPeople.length}</span></span>Participants</button>
         <button type="button" onClick={() => setSidePanel(sidePanel === "chat" ? null : "chat")} className="relative flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:text-xs"><span className="p-1.5"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z" /></svg></span>Chat{unread > 0 && sidePanel !== "chat" && <span className="absolute right-2 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{unread}</span>}</button>
         <button type="button" onClick={toggleScreenShare} className={`flex min-w-[70px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] transition hover:bg-zoom-room-tile sm:min-w-[84px] sm:text-xs ${screenStream ? "text-green-300" : "text-white"}`}><span className="p-1.5 text-green-400"><ScreenIcon /></span>{screenStream ? "Stop Share" : "Share Screen"}</button>
-        <div ref={reactionPickerRef} className="relative">
-          <button type="button" onClick={() => setReactionOpen((open) => !open)} aria-expanded={reactionOpen} className="flex min-w-[62px] flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:text-xs"><span className="p-1.5">✧</span>Reactions</button>
-          {reactionOpen && <div className="absolute bottom-full left-1/2 mb-3 flex -translate-x-1/2 gap-1 rounded-xl border border-white/10 bg-[#2B2B2B] p-2 shadow-xl">{reactionEmojis.map((emoji) => <button key={emoji} type="button" onClick={() => { sendReaction(emoji); setReactionOpen(false); }} aria-label={`Send ${emoji} reaction`} className="flex h-10 w-10 items-center justify-center rounded-lg text-2xl transition hover:bg-white/10">{emoji}</button>)}</div>}
         </div>
         <button type="button" onClick={handleLeave} className="ml-auto rounded-lg bg-zoom-red px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-red-700 sm:px-6 sm:text-sm">Leave</button>
       </footer>

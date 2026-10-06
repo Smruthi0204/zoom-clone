@@ -36,7 +36,7 @@ function extractMeetingCode(input: string) {
   return digits.length === 10 ? digits : "";
 }
 
-function MeetingSection({ title, meetings, loading, error }: { title: string; meetings: Meeting[]; loading: boolean; error: string }) {
+function MeetingSection({ title, meetings, loading, error, searchActive }: { title: string; meetings: Meeting[]; loading: boolean; error: string; searchActive: boolean }) {
   return (
     <section className="mt-9">
       <div className="mb-4 flex items-center justify-between">
@@ -48,7 +48,7 @@ function MeetingSection({ title, meetings, loading, error }: { title: string; me
       ) : error ? (
         <div className="border-y border-amber-200 bg-amber-50 px-5 py-6 text-center text-sm text-amber-800">{error}</div>
       ) : meetings.length === 0 ? (
-        <div className="border-y border-zoom-border bg-white px-5 py-8 text-center text-sm text-zoom-muted">No {title.toLowerCase()} meetings</div>
+        <div className="border-y border-zoom-border bg-white px-5 py-8 text-center text-sm text-zoom-muted">{searchActive ? "No meetings match your search." : `No ${title.toLowerCase()} meetings`}</div>
       ) : (
         <div className="divide-y divide-zoom-border border-y border-zoom-border bg-white">{meetings.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} />)}</div>
       )}
@@ -59,6 +59,7 @@ function MeetingSection({ title, meetings, loading, error }: { title: string; me
 export default function Home() {
   const [today, setToday] = useState("");
   const [clock, setClock] = useState("");
+  const [meetingSearch, setMeetingSearch] = useState("");
   const [upcoming, setUpcoming] = useState<Meeting[]>([]);
   const [recent, setRecent] = useState<Meeting[]>([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
@@ -152,6 +153,10 @@ export default function Home() {
   }
 
   useEffect(() => {
+    function handleSearch(event: Event) {
+      setMeetingSearch((event as CustomEvent<string>).detail ?? "");
+    }
+    window.addEventListener("meeting-search", handleSearch);
     const message = sessionStorage.getItem("dashboard-message");
     if (message) {
       setRoomMessage(message);
@@ -164,8 +169,18 @@ export default function Home() {
     // Load each list independently so one unavailable endpoint does not hide the other.
     getUpcoming().then(setUpcoming).catch(() => setUpcomingError("Upcoming meetings could not be loaded. Check that the backend is running.")).finally(() => setUpcomingLoading(false));
     getRecent().then(setRecent).catch(() => setRecentError("Recent meetings could not be loaded. Check that the backend is running.")).finally(() => setRecentLoading(false));
-    return () => window.clearInterval(clockTimer);
+    return () => {
+      window.clearInterval(clockTimer);
+      window.removeEventListener("meeting-search", handleSearch);
+    };
   }, []);
+
+  function filterMeetings(meetings: Meeting[]) {
+    const titleQuery = meetingSearch.trim().toLowerCase();
+    const codeQuery = titleQuery.replace(/\s/g, "");
+    if (!titleQuery) return meetings;
+    return meetings.filter((meeting) => meeting.title.toLowerCase().includes(titleQuery) || meeting.meeting_code.includes(codeQuery));
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -191,8 +206,8 @@ export default function Home() {
 
           {scheduledInvite && <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"><span>Meeting scheduled · ID {scheduledMeetingId}: <a className="font-semibold underline" href={scheduledInvite}>{scheduledInvite}</a></span><button type="button" onClick={() => navigator.clipboard.writeText(scheduledInvite)} className="font-semibold">Copy link</button></div>}
 
-          <MeetingSection title="Upcoming meetings" meetings={upcoming} loading={upcomingLoading} error={upcomingError} />
-          <MeetingSection title="Recent meetings" meetings={recent} loading={recentLoading} error={recentError} />
+          <MeetingSection title="Upcoming meetings" meetings={filterMeetings(upcoming)} loading={upcomingLoading} error={upcomingError} searchActive={Boolean(meetingSearch.trim())} />
+          <MeetingSection title="Recent meetings" meetings={filterMeetings(recent)} loading={recentLoading} error={recentError} searchActive={Boolean(meetingSearch.trim())} />
         </main>
       </div>
 
