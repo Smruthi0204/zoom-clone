@@ -13,7 +13,7 @@ function TileIcon({ kind }: { kind: "video" | "join" | "calendar" }) {
     return <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="3" /><path d="m15 10 6-3v10l-6-3" /></svg>;
   }
   if (kind === "join") {
-    return <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" /></svg>;
+    return <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>;
   }
   return <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg>;
 }
@@ -40,17 +40,17 @@ function MeetingSection({ title, meetings, loading, error }: { title: string; me
   return (
     <section className="mt-9">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
-        <a href="/meetings" className="text-sm font-semibold text-[#0B5CFF] hover:underline">View all</a>
+        <h2 className="text-lg font-semibold tracking-tight text-zoom-heading">{title}</h2>
+        <a href="/meetings" className="text-sm font-semibold text-zoom-blue hover:underline">View all</a>
       </div>
       {loading ? (
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-sm text-slate-500">Loading meetings…</div>
+        <div className="border-y border-zoom-border bg-white px-5 py-8 text-center text-sm text-zoom-muted">Loading meetings…</div>
       ) : error ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-6 text-center text-sm text-amber-800">{error}</div>
+        <div className="border-y border-amber-200 bg-amber-50 px-5 py-6 text-center text-sm text-amber-800">{error}</div>
       ) : meetings.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center text-sm text-slate-500">No meetings to show yet.</div>
+        <div className="border-y border-zoom-border bg-white px-5 py-8 text-center text-sm text-zoom-muted">No {title.toLowerCase()} meetings</div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{meetings.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} />)}</div>
+        <div className="divide-y divide-zoom-border border-y border-zoom-border bg-white">{meetings.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} />)}</div>
       )}
     </section>
   );
@@ -58,6 +58,7 @@ function MeetingSection({ title, meetings, loading, error }: { title: string; me
 
 export default function Home() {
   const [today, setToday] = useState("");
+  const [clock, setClock] = useState("");
   const [upcoming, setUpcoming] = useState<Meeting[]>([]);
   const [recent, setRecent] = useState<Meeting[]>([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
@@ -71,6 +72,7 @@ export default function Home() {
   const [joinCode, setJoinCode] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [scheduledInvite, setScheduledInvite] = useState("");
+  const [scheduledMeetingId, setScheduledMeetingId] = useState("");
   const [roomMessage, setRoomMessage] = useState("");
 
   async function openNewMeeting() {
@@ -133,6 +135,7 @@ export default function Home() {
         duration_minutes: Number(form.get("duration")),
       });
       setScheduledInvite(meeting.invite_link);
+      setScheduledMeetingId(meeting.meeting_code.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3"));
       setModal(null);
       try {
         setUpcoming(await getUpcoming());
@@ -155,32 +158,38 @@ export default function Home() {
       sessionStorage.removeItem("dashboard-message");
     }
     setToday(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }));
+    const updateClock = () => setClock(new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }));
+    updateClock();
+    const clockTimer = window.setInterval(updateClock, 30000);
     // Load each list independently so one unavailable endpoint does not hide the other.
     getUpcoming().then(setUpcoming).catch(() => setUpcomingError("Upcoming meetings could not be loaded. Check that the backend is running.")).finally(() => setUpcomingLoading(false));
     getRecent().then(setRecent).catch(() => setRecentError("Recent meetings could not be loaded. Check that the backend is running.")).finally(() => setRecentLoading(false));
+    return () => window.clearInterval(clockTimer);
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
+    <div className="min-h-screen bg-white">
       <Navbar />
-      <div className="flex min-h-[calc(100vh-76px)]">
+      <div className="flex min-h-[calc(100vh-56px)]">
         <Sidebar />
-        <main className="mx-auto w-full max-w-[1440px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
-          <div className="mb-8">
-            <p className="text-sm font-medium text-slate-500">{today}</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900 sm:text-[34px]">Good to see you, Alex <span aria-hidden="true">👋</span></h1>
-            <p className="mt-2 text-sm text-slate-500">Ready to connect with your team?</p>
+        <main className="mx-auto w-full max-w-[1440px] px-6 py-8 sm:px-8 lg:px-12 lg:py-10">
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-6">
+            <div><h1 className="text-2xl font-semibold tracking-tight text-zoom-heading">Good to see you, Alex <span aria-hidden="true">👋</span></h1>
+              <p className="mt-2 text-sm text-zoom-muted">Ready to connect with your team?</p></div>
+            <div className="min-w-[200px] rounded-xl border border-zoom-border bg-zoom-panel px-5 py-4 text-right">
+              <p className="text-3xl font-semibold tracking-tight text-zoom-heading">{clock}</p><p className="mt-1 text-xs text-zoom-muted">{today}</p>
+            </div>
           </div>
 
-          {roomMessage && <p role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{roomMessage}</p>}
+          {roomMessage && <p role="status" className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{roomMessage}</p>}
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <ActionTile label="New Meeting" color="#FF742E" icon={<TileIcon kind="video" />} onClick={openNewMeeting} />
-            <ActionTile label="Join Meeting" color="#0B5CFF" icon={<TileIcon kind="join" />} onClick={() => { setModal("join"); setActionError(""); }} />
-            <ActionTile label="Schedule Meeting" color="#0B5CFF" icon={<TileIcon kind="calendar" />} onClick={() => { setModal("schedule"); setActionError(""); }} />
+          <div className="mb-10 flex flex-wrap gap-x-8 gap-y-5">
+            <ActionTile label="New meeting" color="var(--zoom-orange)" icon={<TileIcon kind="video" />} onClick={openNewMeeting} />
+            <ActionTile label="Join" color="var(--zoom-blue)" icon={<TileIcon kind="join" />} onClick={() => { setModal("join"); setActionError(""); }} />
+            <ActionTile label="Schedule" color="var(--zoom-blue)" icon={<TileIcon kind="calendar" />} onClick={() => { setModal("schedule"); setActionError(""); }} />
           </div>
 
-          {scheduledInvite && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"><span>Meeting scheduled: <a className="font-semibold underline" href={scheduledInvite}>{scheduledInvite}</a></span><button type="button" onClick={() => navigator.clipboard.writeText(scheduledInvite)} className="font-semibold">Copy link</button></div>}
+          {scheduledInvite && <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"><span>Meeting scheduled · ID {scheduledMeetingId}: <a className="font-semibold underline" href={scheduledInvite}>{scheduledInvite}</a></span><button type="button" onClick={() => navigator.clipboard.writeText(scheduledInvite)} className="font-semibold">Copy link</button></div>}
 
           <MeetingSection title="Upcoming meetings" meetings={upcoming} loading={upcomingLoading} error={upcomingError} />
           <MeetingSection title="Recent meetings" meetings={recent} loading={recentLoading} error={recentError} />
@@ -188,9 +197,9 @@ export default function Home() {
       </div>
 
       {modal === "new" && <Modal title="Your meeting is ready" onClose={closeModal}>
-        {busy ? <p className="text-sm text-slate-500">Creating your meeting…</p> : actionError ? <p role="alert" className="text-sm text-red-600">{actionError}</p> : instantMeeting && <div>
-          <p className="text-sm text-slate-500">Meeting ID</p><p className="mt-1 text-2xl font-bold tracking-wider">{instantMeeting.meeting_code.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3")}</p>
-          <p className="mt-5 text-sm font-medium text-slate-700">Invite link</p><div className="mt-2 flex gap-2"><input readOnly value={instantMeeting.invite_link} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"/><button type="button" onClick={() => navigator.clipboard.writeText(instantMeeting.invite_link)} className="rounded-lg border px-3 text-sm font-semibold text-[#0B5CFF]">Copy</button></div>
+        {busy ? <p className="text-sm text-zoom-muted">Creating your meeting…</p> : actionError ? <p role="alert" className="text-sm text-zoom-red">{actionError}</p> : instantMeeting && <div>
+          <p className="text-sm text-zoom-muted">Meeting ID</p><p className="mt-1 text-2xl font-semibold tracking-wider text-zoom-heading">{instantMeeting.meeting_code.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3")}</p>
+          <p className="mt-5 text-sm font-medium text-zoom-heading">Invite link</p><div className="mt-2 flex gap-2"><input readOnly value={instantMeeting.invite_link} className="min-w-0 flex-1 rounded-lg border border-zoom-border px-3 py-2 text-sm"/><button type="button" onClick={() => navigator.clipboard.writeText(instantMeeting.invite_link)} className="rounded-lg border border-zoom-border px-3 text-sm font-semibold text-zoom-blue">Copy</button></div>
           <button type="button" onClick={async () => {
             setBusy(true);
             try {
@@ -205,27 +214,27 @@ export default function Home() {
               setActionError(error instanceof Error ? error.message : "Could not join meeting");
               setBusy(false);
             }
-          }} className="mt-6 w-full rounded-xl bg-[#0B5CFF] px-4 py-3 font-semibold text-white">Start meeting</button>
+          }} className="mt-6 w-full rounded-lg bg-zoom-blue px-4 py-3 font-semibold text-white transition hover:bg-zoom-blue-hover">Start meeting</button>
         </div>}
       </Modal>}
 
       {modal === "join" && <Modal title="Join a meeting" onClose={closeModal}>
         <form onSubmit={handleJoin} className="space-y-4">
-          <label className="block text-sm font-medium text-slate-700">Meeting ID or invite link<input required value={joinCode} onChange={(event) => setJoinCode(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" placeholder="123 456 7890 or paste a link" /></label>
-          <label className="block text-sm font-medium text-slate-700">Display name<input required value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Your name" /></label>
-          {actionError && <p role="alert" className="text-sm text-red-600">{actionError}</p>}
-          <button disabled={busy} className="w-full rounded-xl bg-[#0B5CFF] px-4 py-3 font-semibold text-white disabled:opacity-60">{busy ? "Joining…" : "Join meeting"}</button>
+          <label className="block text-sm font-medium text-zoom-heading">Meeting ID or personal link name<input required value={joinCode} onChange={(event) => setJoinCode(event.target.value)} className="mt-1.5 w-full rounded-lg border border-zoom-border px-3 py-2.5 focus:border-zoom-blue focus:ring-2 focus:ring-zoom-blue/20" placeholder="123 456 7890 or paste a link" /></label>
+          <label className="block text-sm font-medium text-zoom-heading">Your name<input required value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-1.5 w-full rounded-lg border border-zoom-border px-3 py-2.5 focus:border-zoom-blue focus:ring-2 focus:ring-zoom-blue/20" placeholder="Your name" /></label>
+          {actionError && <p role="alert" className="text-sm text-zoom-red">{actionError}</p>}
+          <div className="flex gap-2"><button type="button" onClick={closeModal} className="flex-1 rounded-lg border border-zoom-border px-4 py-3 font-semibold text-zoom-heading hover:bg-zoom-panel">Cancel</button><button disabled={busy} className="flex-1 rounded-lg bg-zoom-blue px-4 py-3 font-semibold text-white transition hover:bg-zoom-blue-hover disabled:opacity-60">{busy ? "Joining…" : "Join"}</button></div>
         </form>
       </Modal>}
 
-      {modal === "schedule" && <Modal title="Schedule a meeting" onClose={closeModal}>
+      {modal === "schedule" && <Modal title="Schedule meeting" onClose={closeModal}>
         <form onSubmit={handleSchedule} className="space-y-4">
-          <label className="block text-sm font-medium text-slate-700">Title<input name="title" required className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-          <label className="block text-sm font-medium text-slate-700">Description<textarea name="description" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" rows={2} /></label>
-          <div className="grid grid-cols-2 gap-3"><label className="text-sm font-medium text-slate-700">Date<input name="date" type="date" required min={new Date().toLocaleDateString("en-CA")} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label><label className="text-sm font-medium text-slate-700">Time<input name="time" type="time" required className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label></div>
-          <label className="block text-sm font-medium text-slate-700">Duration<select name="duration" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1 hour 30 minutes</option></select></label>
+          <label className="grid grid-cols-[92px_1fr] items-center gap-3 text-sm font-medium text-zoom-heading">Topic<input name="title" required className="min-w-0 rounded-lg border border-zoom-border px-3 py-2.5 text-sm font-normal focus:border-zoom-blue focus:ring-2 focus:ring-zoom-blue/20" /></label>
+          <label className="grid grid-cols-[92px_1fr] items-start gap-3 text-sm font-medium text-zoom-heading">Description<textarea name="description" className="min-w-0 rounded-lg border border-zoom-border px-3 py-2.5 text-sm font-normal focus:border-zoom-blue focus:ring-2 focus:ring-zoom-blue/20" rows={2} /></label>
+          <div className="grid grid-cols-[92px_1fr] items-center gap-3"><span className="text-sm font-medium text-zoom-heading">When</span><div className="grid grid-cols-2 gap-2"><input aria-label="Date" name="date" type="date" required min={new Date().toLocaleDateString("en-CA")} className="min-w-0 rounded-lg border border-zoom-border px-2 py-2.5 text-sm focus:border-zoom-blue focus:ring-2 focus:ring-zoom-blue/20" /><input aria-label="Time" name="time" type="time" required className="min-w-0 rounded-lg border border-zoom-border px-2 py-2.5 text-sm focus:border-zoom-blue focus:ring-2 focus:ring-zoom-blue/20" /></div></div>
+          <label className="grid grid-cols-[92px_1fr] items-center gap-3 text-sm font-medium text-zoom-heading">Duration<select name="duration" className="rounded-lg border border-zoom-border px-3 py-2.5 text-sm font-normal focus:border-zoom-blue focus:ring-2 focus:ring-zoom-blue/20"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1 hour 30 minutes</option></select></label>
           {actionError && <p role="alert" className="text-sm text-red-600">{actionError}</p>}
-          <button disabled={busy} className="w-full rounded-xl bg-[#0B5CFF] px-4 py-3 font-semibold text-white disabled:opacity-60">{busy ? "Saving…" : "Schedule meeting"}</button>
+          <div className="flex justify-end gap-2 border-t border-zoom-border pt-4"><button type="button" onClick={closeModal} className="rounded-lg border border-zoom-border px-4 py-2.5 text-sm font-semibold text-zoom-heading hover:bg-zoom-panel">Cancel</button><button disabled={busy} className="rounded-lg bg-zoom-blue px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-zoom-blue-hover disabled:opacity-60">{busy ? "Saving…" : "Save"}</button></div>
         </form>
       </Modal>}
     </div>

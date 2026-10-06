@@ -10,12 +10,12 @@ type ModalProps = {
 
 export default function Modal({ title, onClose, children }: ModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" onMouseDown={(event) => {
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[1px]" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="modal-title" className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+      <section role="dialog" aria-modal="true" aria-labelledby="modal-title" className="w-full max-w-[440px] rounded-xl border border-zoom-border bg-white p-6 shadow-[0_18px_60px_rgba(14,29,46,0.2)] sm:p-7">
         <div className="mb-6 flex items-center justify-between">
-          <h2 id="modal-title" className="text-xl font-bold text-slate-900">{title}</h2>
+          <h2 id="modal-title" className="text-xl font-semibold text-zoom-heading">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg px-2 py-1 text-xl text-slate-400 hover:bg-slate-100">×</button>
         </div>
         {children}

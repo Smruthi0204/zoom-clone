@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { getMeetingWebSocketUrl, type ChatMessage } from "@/lib/api";
 
+export type ReactionEvent = {
+  id: number;
+  participant_id: number;
+  sender_name: string;
+  emoji: string;
+};
+
 export default function useWebRTC(
   code: string,
   participantId: number | null,
@@ -15,12 +22,15 @@ export default function useWebRTC(
   const connectionsRef = useRef(new Map<number, RTCPeerConnection>());
   const remoteStreamsRef = useRef(new Map<number, MediaStream>());
   const pendingCandidatesRef = useRef(new Map<number, RTCIceCandidateInit[]>());
+  const nextReactionIdRef = useRef(0);
+  const reactionTimersRef = useRef<number[]>([]);
   const [remoteStreams, setRemoteStreams] = useState<Map<number, MediaStream>>(new Map());
   const [peerIds, setPeerIds] = useState<Set<number>>(new Set());
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
   const [muteAllVersion, setMuteAllVersion] = useState(0);
   const [removedVersion, setRemovedVersion] = useState(0);
+  const [reactions, setReactions] = useState<ReactionEvent[]>([]);
 
   localStreamRef.current = localStream;
   screenTrackRef.current = screenTrack;
@@ -131,6 +141,17 @@ export default function useWebRTC(
         setRemovedVersion((version) => version + 1);
         return;
       }
+      if (message.type === "reaction" && typeof message.participant_id === "number" && typeof message.sender_name === "string" && typeof message.emoji === "string") {
+        const reaction = { ...message, id: ++nextReactionIdRef.current } as ReactionEvent;
+        setReactions((current) => [...current, reaction]);
+        let timer = 0;
+        timer = window.setTimeout(() => {
+          setReactions((current) => current.filter((item) => item.id !== reaction.id));
+          reactionTimersRef.current = reactionTimersRef.current.filter((activeTimer) => activeTimer !== timer);
+        }, 2000);
+        reactionTimersRef.current.push(timer);
+        return;
+      }
       if (message.type === "peers") {
         const peers = (message.peers as number[]).filter((peerId) => peerId !== participantId);
         setPeerIds(new Set(peers));
@@ -178,12 +199,20 @@ export default function useWebRTC(
       connectionsRef.current.clear();
       remoteStreamsRef.current.clear();
       pendingCandidatesRef.current.clear();
+      reactionTimersRef.current.forEach(window.clearTimeout);
+      reactionTimersRef.current = [];
     };
   }, [code, participantId]);
 
   function sendChat(text: string) {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: "chat", text }));
+    }
+  }
+
+  function sendReaction(emoji: string) {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "reaction", emoji }));
     }
   }
 
@@ -200,10 +229,13 @@ export default function useWebRTC(
     connectionsRef.current.clear();
     remoteStreamsRef.current.clear();
     pendingCandidatesRef.current.clear();
+    reactionTimersRef.current.forEach(window.clearTimeout);
+    reactionTimersRef.current = [];
+    setReactions([]);
     setRemoteStreams(new Map());
     setPeerIds(new Set());
     setConnected(false);
   }
 
-  return { remoteStreams, peerIds, chatMessages, connected, muteAllVersion, removedVersion, sendChat, sendModeration, close };
+  return { remoteStreams, peerIds, chatMessages, reactions, connected, muteAllVersion, removedVersion, sendChat, sendReaction, sendModeration, close };
 }

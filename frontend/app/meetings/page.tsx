@@ -21,18 +21,23 @@ export default function MeetingsPage() {
   }, []);
 
   const meetings = tab === "upcoming" ? upcoming : previous;
+  const groups = meetings.reduce<Record<string, Meeting[]>>((result, meeting) => {
+    const day = new Date(meeting.start_time).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    (result[day] ??= []).push(meeting);
+    return result;
+  }, {});
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
+    <div className="min-h-screen bg-white">
       <Navbar />
-      <div className="flex min-h-[calc(100vh-76px)]">
+      <div className="flex min-h-[calc(100vh-56px)]">
         <Sidebar current="Meetings" />
-        <main className="mx-auto w-full max-w-[1440px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Meetings</h1>
-          <div className="mt-7 flex gap-6 border-b border-slate-200">
-            {(["upcoming", "previous"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`border-b-2 px-1 pb-3 text-sm font-semibold capitalize ${tab === item ? "border-[#0B5CFF] text-[#0B5CFF]" : "border-transparent text-slate-500 hover:text-slate-800"}`}>{item}</button>)}
+        <main className="mx-auto w-full max-w-[1440px] px-6 py-8 sm:px-8 lg:px-12 lg:py-10">
+          <div className="flex flex-wrap items-center justify-between gap-4"><h1 className="text-2xl font-semibold tracking-tight text-zoom-heading">Meetings</h1><a href="/" className="rounded-lg bg-zoom-blue px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zoom-blue-hover">Schedule a meeting</a></div>
+          <div className="mt-6 flex gap-7 border-b border-zoom-border">
+            {(["upcoming", "previous"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`border-b-2 px-1 pb-3 text-sm font-semibold capitalize transition ${tab === item ? "border-zoom-blue text-zoom-blue" : "border-transparent text-zoom-muted hover:text-zoom-heading"}`}>{item === "previous" ? "Previous" : "Upcoming"}</button>)}
           </div>
-          {loading ? <p className="py-10 text-center text-sm text-slate-500">Loading meetings…</p> : error ? <p role="alert" className="mt-6 rounded-xl bg-amber-50 p-5 text-sm text-amber-800">{error}</p> : meetings.length ? <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{meetings.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} />)}</div> : <p className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center text-sm text-slate-500">No {tab} meetings.</p>}
+          {loading ? <p className="py-10 text-center text-sm text-zoom-muted">Loading meetings…</p> : error ? <p role="alert" className="mt-6 rounded-lg bg-amber-50 p-5 text-sm text-amber-800">{error}</p> : meetings.length ? <div className="mt-6 space-y-7">{Object.entries(groups).map(([day, dayMeetings]) => <section key={day}><h2 className="mb-2 text-sm font-semibold text-zoom-heading">{day}</h2><div className="divide-y divide-zoom-border border-y border-zoom-border">{dayMeetings.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} />)}</div></section>)}</div> : <p className="mt-6 border-y border-zoom-border bg-zoom-panel px-5 py-10 text-center text-sm text-zoom-muted">No {tab} meetings.</p>}
         </main>
       </div>
     </div>

@@ -9,11 +9,11 @@ type ActionTileProps = {
 
 export default function ActionTile({ icon, label, color, onClick }: ActionTileProps) {
   return (
-    <button type="button" onClick={onClick} className="group flex min-h-[150px] flex-col items-start justify-between rounded-2xl p-5 text-left text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:min-h-[172px]" style={{ backgroundColor: color }}>
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20">{icon}</span>
-      <span className="flex w-full items-center justify-between text-base font-semibold">
-        {label}<span className="text-lg transition group-hover:translate-x-1" aria-hidden="true">→</span>
+    <button type="button" onClick={onClick} className="group flex w-[132px] flex-col items-center gap-3 text-center focus-visible:ring-2 focus-visible:ring-zoom-blue">
+      <span className="flex h-[132px] w-[132px] items-center justify-center rounded-xl text-white shadow-sm transition group-hover:brightness-90" style={{ backgroundColor: color }}>
+        <span className="flex h-12 w-12 items-center justify-center">{icon}</span>
       </span>
+      <span className="text-sm font-semibold text-zoom-heading">{label}</span>
     </button>
   );
 }
