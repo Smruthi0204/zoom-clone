@@ -8,13 +8,13 @@ const items = [
   { label: "Apps", href: "#", icon: "⊞" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ current = "Home" }: { current?: string }) {
   return (
     <aside className="hidden w-[232px] shrink-0 border-r border-slate-200 bg-white px-4 py-7 lg:block">
       <p className="mb-4 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Workspace</p>
       <nav className="space-y-1" aria-label="Main navigation">
         {items.map((item) => (
-          <Link key={item.label} href={item.href} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium ${item.active ? "bg-[#edf3ff] text-[#0B5CFF]" : "text-slate-600 hover:bg-slate-50"}`}>
+          <Link key={item.label} href={item.href} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium ${(item.label === current) ? "bg-[#edf3ff] text-[#0B5CFF]" : "text-slate-600 hover:bg-slate-50"}`}>
             <span className="w-5 text-center text-lg leading-none" aria-hidden="true">{item.icon}</span>
             {item.label}
           </Link>
