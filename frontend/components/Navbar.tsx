@@ -44,10 +44,8 @@ export default function Navbar() {
           <span className="hidden text-sm font-medium text-zoom-heading md:block">Alex Morgan</span>
           <svg viewBox="0 0 20 20" className="hidden h-4 w-4 text-zoom-muted md:block" fill="currentColor" aria-hidden="true"><path d="m5 7 5 5 5-5" /></svg>
         </button>
-        {menuOpen && <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-zoom-border bg-white p-2 shadow-xl">
-          <div className="border-b border-zoom-border px-3 py-2.5"><p className="text-sm font-semibold text-zoom-heading">Alex Morgan</p><p className="mt-0.5 text-xs text-zoom-muted">alex.morgan@example.com</p></div>
-          <button type="button" onClick={() => setMenuOpen(false)} className="mt-1 w-full cursor-default rounded-lg px-3 py-2 text-left text-sm text-slate-400">Settings</button>
-          <button type="button" onClick={() => setMenuOpen(false)} className="w-full cursor-default rounded-lg px-3 py-2 text-left text-sm text-slate-400">Sign out</button>
+        {menuOpen && <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-zoom-border bg-white px-4 py-3 shadow-xl">
+          <p className="text-sm font-semibold text-zoom-heading">Alex Morgan</p><p className="mt-0.5 text-xs text-zoom-muted">alex.morgan@example.com</p>
         </div>}
       </div>
       {drawerOpen && <div className="fixed inset-0 z-40 lg:hidden">

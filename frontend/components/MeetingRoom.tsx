@@ -33,17 +33,31 @@ function ParticipantTile({ name, local, videoRef, videoOff, remoteStream, micOff
   className?: string;
 }) {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const [remoteVideoReady, setRemoteVideoReady] = useState(false);
   const hasRemoteVideo = remoteStream?.getVideoTracks().some((track) => track.readyState === "live") ?? false;
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
+    setRemoteVideoReady(false);
+    if (!remoteStream) return;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
+    const videoTracks = remoteStream.getVideoTracks();
+    const updateVideoState = () => setRemoteVideoReady(videoTracks.some((track) => track.readyState === "live" && !track.muted));
+    videoTracks.forEach((track) => {
+      track.addEventListener("unmute", updateVideoState);
+      track.addEventListener("mute", updateVideoState);
+    });
+    updateVideoState();
+    return () => videoTracks.forEach((track) => {
+      track.removeEventListener("unmute", updateVideoState);
+      track.removeEventListener("mute", updateVideoState);
+    });
   }, [remoteStream]);
 
   return (
     <div className={`relative flex h-full w-full min-h-0 items-center justify-center overflow-hidden rounded-lg bg-zoom-room-tile ${className ?? ""}`}>
       {local && !videoOff ? <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" /> : !local && remoteStream ? <>
-        <video ref={remoteVideoRef} autoPlay playsInline className={hasRemoteVideo ? "absolute inset-0 h-full w-full object-cover" : "hidden"} />
-        {!hasRemoteVideo && <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#414141] text-2xl font-semibold text-white">{initials(name)}</div>}
+        <video ref={remoteVideoRef} autoPlay playsInline className={hasRemoteVideo && remoteVideoReady ? "absolute inset-0 h-full w-full object-cover" : "hidden"} />
+        {(!hasRemoteVideo || !remoteVideoReady) && <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#414141] text-2xl font-semibold text-white">{initials(name)}</div>}
       </> : (
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#414141] text-2xl font-semibold text-white">{initials(name)}</div>
       )}
@@ -62,6 +76,7 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const roomMountedRef = useRef(false);
   const heartbeatTimerRef = useRef<number | null>(null);
   const muteAllRef = useRef(false);
   const chatOpenRef = useRef(false);
@@ -93,6 +108,31 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     }
   }
 
+  function setLocalTrack(kind: "audio" | "video", track: MediaStreamTrack | null) {
+    const currentTracks = streamRef.current?.getTracks() ?? [];
+    const keep = currentTracks.filter((item) => item.kind !== kind && item.readyState === "live");
+    const next = track ? new MediaStream([...keep, track]) : keep.length ? new MediaStream(keep) : null;
+    streamRef.current = next;
+    setLocalStream(next);
+    if (videoRef.current) videoRef.current.srcObject = next;
+  }
+
+  function stopLocalTrack(kind: "audio" | "video") {
+    const track = streamRef.current?.getTracks().find((item) => item.kind === kind);
+    track?.stop();
+    setLocalTrack(kind, null);
+  }
+
+  useEffect(() => {
+    roomMountedRef.current = true;
+    return () => {
+      roomMountedRef.current = false;
+      // A late permission response must not leave the camera or mic running.
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
   useEffect(() => {
     const savedId = Number(sessionStorage.getItem(`meeting-participant:${code}`));
     if (savedId > 0) {
@@ -106,8 +146,7 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   useEffect(() => {
     if (!muteAllVersion) return;
     muteAllRef.current = true;
-    const audioTrack = streamRef.current?.getAudioTracks()[0];
-    if (audioTrack) audioTrack.enabled = false;
+    stopLocalTrack("audio");
     setMuted(true);
   }, [muteAllVersion]);
 
@@ -141,34 +180,6 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     heartbeatTimerRef.current = window.setInterval(() => {
       heartbeatMeeting(code, participantId).catch(() => {});
     }, 5000);
-
-    // Start the camera and microphone once when the meeting room opens.
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setNotice("Camera and microphone are not available in this browser.");
-    } else {
-      navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
-        if (!active) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        streamRef.current = stream;
-        setLocalStream(stream);
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        const audioTrack = stream.getAudioTracks()[0];
-        const videoTrack = stream.getVideoTracks()[0];
-        if (muteAllRef.current && audioTrack) audioTrack.enabled = false;
-        setMuted(!audioTrack || !audioTrack.enabled);
-        setVideoOff(!videoTrack || !videoTrack.enabled);
-        if (!videoTrack) setNotice("No camera was found. Your tile is showing your initials.");
-        else if (!audioTrack) setNotice("No microphone was found. Your tile is showing video only.");
-      }).catch(() => {
-        if (active) {
-          setMuted(true);
-          setVideoOff(true);
-          setNotice("Camera or microphone access was denied. Your tile is showing your initials.");
-        }
-      });
-    }
 
     return () => {
       active = false;
@@ -252,19 +263,54 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     return () => window.clearInterval(timer);
   }, []);
 
-  function toggleMute() {
-    const track = streamRef.current?.getAudioTracks()[0];
-    if (!track) return;
-    muteAllRef.current = false;
-    track.enabled = muted;
-    setMuted(!muted);
+  async function toggleMute() {
+    if (!muted) {
+      muteAllRef.current = false;
+      stopLocalTrack("audio");
+      setMuted(true);
+      return;
+    }
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const track = stream.getAudioTracks()[0];
+      if (!track || !roomMountedRef.current) {
+        stream.getTracks().forEach((item) => item.stop());
+        throw new Error();
+      }
+      muteAllRef.current = false;
+      setNotice("");
+      setLocalTrack("audio", track);
+      setMuted(false);
+    } catch {
+      if (!roomMountedRef.current) return;
+      setMuted(true);
+      setNotice("Microphone access is unavailable. Check your permission or device.");
+    }
   }
 
-  function toggleVideo() {
-    const track = streamRef.current?.getVideoTracks()[0];
-    if (!track) return;
-    track.enabled = videoOff;
-    setVideoOff(!videoOff);
+  async function toggleVideo() {
+    if (!videoOff) {
+      stopLocalTrack("video");
+      setVideoOff(true);
+      return;
+    }
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error();
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const track = stream.getVideoTracks()[0];
+      if (!track || !roomMountedRef.current) {
+        stream.getTracks().forEach((item) => item.stop());
+        throw new Error();
+      }
+      setNotice("");
+      setLocalTrack("video", track);
+      setVideoOff(false);
+    } catch {
+      if (!roomMountedRef.current) return;
+      setVideoOff(true);
+      setNotice("Camera access is unavailable. Check your permission or device.");
+    }
   }
 
   function stopScreenShare() {
@@ -281,6 +327,10 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
 
     try {
       const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      if (!roomMountedRef.current) {
+        screen.getTracks().forEach((track) => track.stop());
+        return;
+      }
       screen.getVideoTracks()[0]?.addEventListener("ended", stopScreenShare, { once: true });
       screenStreamRef.current = screen;
       setScreenStream(screen);

@@ -56,7 +56,7 @@ export default function useWebRTC(
   }
 
   useEffect(() => {
-    if (!localStream && !screenTrack) return;
+    // Send null tracks too, so mute and camera-off reach existing peers.
     connectionsRef.current.forEach((connection) => { syncLocalTracks(connection).catch(() => {}); });
   }, [localStream, screenTrack]);
 
