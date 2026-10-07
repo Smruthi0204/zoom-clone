@@ -104,7 +104,6 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   const [chatError, setChatError] = useState("");
   const [unread, setUnread] = useState(0);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [canShareScreen, setCanShareScreen] = useState(false);
   const { remoteStreams, peerIds, chatMessages: incomingMessages, connected: socketConnected, muteAllVersion, removedVersion, sendChat: sendLiveChat, sendModeration, close: closeWebRTC } = useWebRTC(
     code, participantId, localStream, screenStream?.getVideoTracks()[0] ?? null,
   );
@@ -142,20 +141,12 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   }, []);
 
   useEffect(() => {
-    // Check browser-only media support after mounting to keep server rendering safe.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCanShareScreen(Boolean(navigator.mediaDevices?.getDisplayMedia));
-  }, []);
-
-  useEffect(() => {
     const savedId = Number(sessionStorage.getItem(`meeting-participant:${code}`));
     if (savedId > 0) {
-      const savedRole = sessionStorage.getItem(`meeting-role:${code}`) === "host" ? "host" : "participant";
-      console.log("Meeting room participant", { code, participantId: savedId, role: savedRole });
       // The participant ID exists only in this browser session.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setParticipantId(savedId);
-      setRole(savedRole);
+      setRole(sessionStorage.getItem(`meeting-role:${code}`) === "host" ? "host" : "participant");
     } else {
       window.location.href = `/join/${code}?name=${encodeURIComponent(displayName)}`;
     }
@@ -344,9 +335,7 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     }
 
     try {
-      const getDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
-      if (!getDisplayMedia) return;
-      const screen = await getDisplayMedia.call(navigator.mediaDevices, { video: true });
+      const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
       if (!roomMountedRef.current) {
         screen.getTracks().forEach((track) => track.stop());
         return;
@@ -448,7 +437,7 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
           }
           setSidePanel(opening ? "chat" : null);
         }} className="relative flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:px-2 sm:gap-1.5 sm:text-xs"><span className="p-1.5"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z" /></svg></span><span className="hidden sm:inline">Chat</span>{unread > 0 && sidePanel !== "chat" && <span className="absolute right-0 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{unread}</span>}</button>
-        {canShareScreen && <button type="button" aria-label={screenStream ? "Stop Share" : "Share Screen"} onClick={toggleScreenShare} className={`flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] transition hover:bg-zoom-room-tile sm:min-w-[84px] sm:px-2 sm:gap-1.5 sm:text-xs ${screenStream ? "text-green-300" : "text-white"}`}><span className="p-1.5 text-green-400"><ScreenIcon /></span><span className="hidden sm:inline">{screenStream ? "Stop Share" : "Share Screen"}</span></button>}
+        <button type="button" aria-label={screenStream ? "Stop Share" : "Share Screen"} onClick={toggleScreenShare} className={`flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] transition hover:bg-zoom-room-tile sm:min-w-[84px] sm:px-2 sm:gap-1.5 sm:text-xs ${screenStream ? "text-green-300" : "text-white"}`}><span className="p-1.5 text-green-400"><ScreenIcon /></span><span className="hidden sm:inline">{screenStream ? "Stop Share" : "Share Screen"}</span></button>
         </div>
         <button type="button" onClick={handleLeave} className="ml-auto rounded-lg bg-zoom-red px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-red-700 sm:px-6 sm:text-sm">Leave</button>
       </footer>

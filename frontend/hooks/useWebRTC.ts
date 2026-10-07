@@ -116,14 +116,7 @@ export default function useWebRTC(
       await syncLocalTracks(peerId, connection);
       const offer = await connection.createOffer();
       await connection.setLocalDescription(offer);
-      console.log("WebRTC offer sent", { fromId: participantId, toId: peerId });
       sendSignal({ type: "offer", target_id: peerId, payload: connection.localDescription });
-    }
-
-    async function connectPeer(peerId: number) {
-      makeConnection(peerId);
-      // The lower participant ID always offers, even if both peer lists were empty.
-      if (participantId !== null && participantId < peerId) await createOffer(peerId);
     }
 
     async function handleMessage(raw: string) {
@@ -141,15 +134,13 @@ export default function useWebRTC(
         return;
       }
       if (message.type === "peers") {
-        const listedPeers = message.peers as number[];
-        console.log("WebRTC peers received", { participantId, peers: listedPeers });
-        const peers = listedPeers.filter((peerId) => peerId !== participantId);
+        const peers = (message.peers as number[]).filter((peerId) => peerId !== participantId);
         setPeerIds(new Set(peers));
-        await Promise.all(peers.map(connectPeer));
+        await Promise.all(peers.map(createOffer));
         return;
       }
       if (message.type === "peer-joined") {
-        await connectPeer(message.participant_id);
+        makeConnection(message.participant_id);
         return;
       }
       if (message.type === "peer-left") {
@@ -161,7 +152,6 @@ export default function useWebRTC(
       const peerId = message.from_id as number;
       const connection = makeConnection(peerId);
       if (message.type === "offer") {
-        console.log("WebRTC offer received", { fromId: peerId, toId: participantId });
         await connection.setRemoteDescription(message.payload as RTCSessionDescriptionInit);
         // Remote offers can leave the answerer's transceivers receive-only.
         for (const transceiver of connection.getTransceivers()) {
@@ -183,10 +173,8 @@ export default function useWebRTC(
             currentDirection: transceiver.currentDirection,
           });
         });
-        console.log("WebRTC answer sent", { fromId: participantId, toId: peerId });
         sendSignal({ type: "answer", target_id: peerId, payload: connection.localDescription });
       } else if (message.type === "answer") {
-        console.log("WebRTC answer received", { fromId: peerId, toId: participantId });
         await connection.setRemoteDescription(message.payload as RTCSessionDescriptionInit);
         await flushCandidates(peerId, connection);
       } else if (message.payload) {
