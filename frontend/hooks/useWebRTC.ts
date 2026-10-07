@@ -25,23 +25,25 @@ export default function useWebRTC(
   const [muteAllVersion, setMuteAllVersion] = useState(0);
   const [removedVersion, setRemovedVersion] = useState(0);
 
-  async function syncLocalTracks(connection: RTCPeerConnection) {
+  function localTrackForKind(kind: string) {
     const tracks = localStreamRef.current?.getTracks() ?? [];
     const camera = tracks.find((track) => track.kind === "video") ?? null;
     const audio = tracks.find((track) => track.kind === "audio") ?? null;
-    const video = screenTrackRef.current ?? camera;
+    return kind === "audio" ? audio : screenTrackRef.current ?? camera;
+  }
 
-    for (const [kind, track] of [["audio", audio], ["video", video]] as const) {
-      const sender = connection.getSenders().find((item) => item.track?.kind === kind)
-        ?? connection.getTransceivers().find((item) => item.receiver.track.kind === kind)?.sender;
-      if (track && sender && sender.track !== track) {
-        await sender.replaceTrack(track);
-      } else if (track && !sender) {
-        // Reuse the local stream for camera and audio, and a small stream for screen video.
-        const stream = track === screenTrackRef.current ? new MediaStream([track]) : localStreamRef.current;
-        if (stream) connection.addTrack(track, stream);
-      } else if (!track && sender?.track) {
-        await sender.replaceTrack(null);
+  async function replaceSenderTrack(peerId: number, kind: string, sender: RTCRtpSender, track: MediaStreamTrack | null) {
+    // Log each actual replacement while debugging one-way media.
+    console.log("replaceTrack", { peerId, kind, trackId: track?.id ?? null });
+    await sender.replaceTrack(track);
+  }
+
+  async function syncLocalTracks(peerId: number, connection: RTCPeerConnection) {
+    for (const transceiver of connection.getTransceivers()) {
+      const kind = transceiver.receiver.track.kind;
+      const track = localTrackForKind(kind);
+      if (transceiver.sender.track !== track) {
+        await replaceSenderTrack(peerId, kind, transceiver.sender, track);
       }
     }
   }
@@ -59,7 +61,7 @@ export default function useWebRTC(
     localStreamRef.current = localStream;
     screenTrackRef.current = screenTrack;
     // Send null tracks too, so mute and camera-off reach existing peers.
-    connectionsRef.current.forEach((connection) => { syncLocalTracks(connection).catch(() => {}); });
+    connectionsRef.current.forEach((connection, peerId) => { syncLocalTracks(peerId, connection).catch(() => {}); });
   }, [localStream, screenTrack]);
 
   useEffect(() => {
@@ -99,7 +101,7 @@ export default function useWebRTC(
         remoteStreamsRef.current.set(peerId, stream);
         setRemoteStreams((current) => new Map(current).set(peerId, stream));
       };
-      syncLocalTracks(connection).catch(() => {});
+      syncLocalTracks(peerId, connection).catch(() => {});
       return connection;
     }
 
@@ -111,7 +113,7 @@ export default function useWebRTC(
 
     async function createOffer(peerId: number) {
       const connection = makeConnection(peerId);
-      await syncLocalTracks(connection);
+      await syncLocalTracks(peerId, connection);
       const offer = await connection.createOffer();
       await connection.setLocalDescription(offer);
       sendSignal({ type: "offer", target_id: peerId, payload: connection.localDescription });
@@ -151,10 +153,26 @@ export default function useWebRTC(
       const connection = makeConnection(peerId);
       if (message.type === "offer") {
         await connection.setRemoteDescription(message.payload as RTCSessionDescriptionInit);
+        // Remote offers can leave the answerer's transceivers receive-only.
+        for (const transceiver of connection.getTransceivers()) {
+          transceiver.direction = "sendrecv";
+          const kind = transceiver.receiver.track.kind;
+          const track = localTrackForKind(kind);
+          if (track && transceiver.sender.track !== track) {
+            await replaceSenderTrack(peerId, kind, transceiver.sender, track);
+          }
+        }
         await flushCandidates(peerId, connection);
-        await syncLocalTracks(connection);
+        await syncLocalTracks(peerId, connection);
         const answer = await connection.createAnswer();
         await connection.setLocalDescription(answer);
+        connection.getTransceivers().forEach((transceiver) => {
+          console.log("answer transceiver", {
+            kind: transceiver.receiver.track.kind,
+            direction: transceiver.direction,
+            currentDirection: transceiver.currentDirection,
+          });
+        });
         sendSignal({ type: "answer", target_id: peerId, payload: connection.localDescription });
       } else if (message.type === "answer") {
         await connection.setRemoteDescription(message.payload as RTCSessionDescriptionInit);
