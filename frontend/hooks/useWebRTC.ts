@@ -33,8 +33,6 @@ export default function useWebRTC(
   }
 
   async function replaceSenderTrack(peerId: number, kind: string, sender: RTCRtpSender, track: MediaStreamTrack | null) {
-    // Log each actual replacement while debugging one-way media.
-    console.log("replaceTrack", { peerId, kind, trackId: track?.id ?? null });
     await sender.replaceTrack(track);
   }
 
@@ -166,13 +164,6 @@ export default function useWebRTC(
         await syncLocalTracks(peerId, connection);
         const answer = await connection.createAnswer();
         await connection.setLocalDescription(answer);
-        connection.getTransceivers().forEach((transceiver) => {
-          console.log("answer transceiver", {
-            kind: transceiver.receiver.track.kind,
-            direction: transceiver.direction,
-            currentDirection: transceiver.currentDirection,
-          });
-        });
         sendSignal({ type: "answer", target_id: peerId, payload: connection.localDescription });
       } else if (message.type === "answer") {
         await connection.setRemoteDescription(message.payload as RTCSessionDescriptionInit);
