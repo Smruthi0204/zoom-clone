@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Sidebar from "@/components/Sidebar";
 
 export default function Navbar() {
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,8 +24,11 @@ export default function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-zoom-border bg-white px-5 sm:px-8">
-      <a href="/" className="flex items-center text-[22px] font-bold tracking-tight text-zoom-blue">zoom</a>
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-zoom-border bg-white px-3 sm:px-8">
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setDrawerOpen(true)} aria-label="Open navigation" className="rounded-lg p-2 text-zoom-heading hover:bg-zoom-panel focus-visible:ring-2 focus-visible:ring-zoom-blue lg:hidden"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+        <a href="/" className="flex items-center text-[22px] font-bold tracking-tight text-zoom-blue">zoom</a>
+      </div>
 
       <label className="hidden w-full max-w-[420px] items-center gap-3 rounded-full border border-zoom-border bg-zoom-panel px-4 py-2 text-sm text-zoom-muted sm:flex">
         <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg>
@@ -45,6 +50,10 @@ export default function Navbar() {
           <button type="button" onClick={() => setMenuOpen(false)} className="w-full cursor-default rounded-lg px-3 py-2 text-left text-sm text-slate-400">Sign out</button>
         </div>}
       </div>
+      {drawerOpen && <div className="fixed inset-0 z-40 lg:hidden">
+        <button type="button" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-y-0 left-0 pt-14"><Sidebar drawer onNavigate={() => setDrawerOpen(false)} /></div>
+      </div>}
     </header>
   );
 }
