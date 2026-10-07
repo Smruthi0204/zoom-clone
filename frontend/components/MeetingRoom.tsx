@@ -150,10 +150,12 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   useEffect(() => {
     const savedId = Number(sessionStorage.getItem(`meeting-participant:${code}`));
     if (savedId > 0) {
+      const savedRole = sessionStorage.getItem(`meeting-role:${code}`) === "host" ? "host" : "participant";
+      console.log("Meeting room participant", { code, participantId: savedId, role: savedRole });
       // The participant ID exists only in this browser session.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setParticipantId(savedId);
-      setRole(sessionStorage.getItem(`meeting-role:${code}`) === "host" ? "host" : "participant");
+      setRole(savedRole);
     } else {
       window.location.href = `/join/${code}?name=${encodeURIComponent(displayName)}`;
     }

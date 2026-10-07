@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 import os
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -11,6 +12,7 @@ from seed import seed_if_empty
 from ws_manager import ConnectionManager
 
 app = FastAPI(title="Zoom Clone API")
+logger = logging.getLogger(__name__)
 connection_manager = ConnectionManager()
 frontend_url = (os.getenv("FRONTEND_URL") or "http://localhost:3000").rstrip("/")
 allowed_origins = {frontend_url, "http://localhost:3000"}
@@ -47,6 +49,7 @@ async def meeting_chat(websocket: WebSocket, code: str, participant_id: int):
     db = SessionLocal()
     meeting = db.query(Meeting).filter(Meeting.meeting_code == code).first()
     if meeting is None:
+        logger.warning("WebSocket rejected: meeting not found code=%s participant_id=%s", code, participant_id)
         db.close()
         await websocket.close(code=1008)
         return
@@ -58,6 +61,7 @@ async def meeting_chat(websocket: WebSocket, code: str, participant_id: int):
     ).first()
 
     if participant is None:
+        logger.warning("WebSocket rejected: participant not found code=%s participant_id=%s", code, participant_id)
         db.close()
         await websocket.close(code=1008)
         return
@@ -66,6 +70,7 @@ async def meeting_chat(websocket: WebSocket, code: str, participant_id: int):
     try:
         peers = await connection_manager.connect(code, participant_id, websocket)
         connected = True
+        logger.info("WebSocket connected: code=%s participant_id=%s role=%s peers=%s", code, participant_id, participant.role, peers)
         await websocket.send_json({"type": "peers", "peers": peers})
         await connection_manager.broadcast(
             code,
@@ -139,6 +144,7 @@ async def meeting_chat(websocket: WebSocket, code: str, participant_id: int):
         pass
     finally:
         if connected:
+            logger.info("WebSocket disconnected: code=%s participant_id=%s", code, participant_id)
             await connection_manager.disconnect(code, participant_id, websocket)
             await connection_manager.broadcast(
                 code,
