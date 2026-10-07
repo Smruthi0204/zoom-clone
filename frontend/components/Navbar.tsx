@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 
 export default function Navbar() {
@@ -27,7 +28,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-zoom-border bg-white px-3 sm:px-8">
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => setDrawerOpen(true)} aria-label="Open navigation" className="rounded-lg p-2 text-zoom-heading hover:bg-zoom-panel focus-visible:ring-2 focus-visible:ring-zoom-blue lg:hidden"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
-        <a href="/" className="flex items-center text-[22px] font-bold tracking-tight text-zoom-blue">zoom</a>
+        <Link href="/" className="flex items-center text-[22px] font-bold tracking-tight text-zoom-blue">zoom</Link>
       </div>
 
       <label className="hidden w-full max-w-[420px] items-center gap-3 rounded-full border border-zoom-border bg-zoom-panel px-4 py-2 text-sm text-zoom-muted sm:flex">

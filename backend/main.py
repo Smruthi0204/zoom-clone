@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import os
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,16 +12,28 @@ from ws_manager import ConnectionManager
 
 app = FastAPI(title="Zoom Clone API")
 connection_manager = ConnectionManager()
+frontend_url = (os.getenv("FRONTEND_URL") or "http://localhost:3000").rstrip("/")
+allowed_origins = {frontend_url, "http://localhost:3000"}
+allowed_origins.update(
+    origin.strip().rstrip("/")
+    for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=sorted(allowed_origins),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(meetings_router)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 @app.on_event("startup")

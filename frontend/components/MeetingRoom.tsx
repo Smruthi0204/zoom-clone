@@ -33,31 +33,38 @@ function ParticipantTile({ name, local, videoRef, videoOff, remoteStream, micOff
   className?: string;
 }) {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const [remoteVideoReady, setRemoteVideoReady] = useState(false);
+  const [readyRemoteStream, setReadyRemoteStream] = useState<MediaStream | null>(null);
   const hasRemoteVideo = remoteStream?.getVideoTracks().some((track) => track.readyState === "live") ?? false;
 
   useEffect(() => {
-    setRemoteVideoReady(false);
     if (!remoteStream) return;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
     const videoTracks = remoteStream.getVideoTracks();
-    const updateVideoState = () => setRemoteVideoReady(videoTracks.some((track) => track.readyState === "live" && !track.muted));
+    const updateVideoState = () => setReadyRemoteStream(
+      videoTracks.some((track) => track.readyState === "live" && !track.muted) ? remoteStream : null,
+    );
     videoTracks.forEach((track) => {
       track.addEventListener("unmute", updateVideoState);
       track.addEventListener("mute", updateVideoState);
+      track.addEventListener("ended", updateVideoState);
     });
-    updateVideoState();
-    return () => videoTracks.forEach((track) => {
-      track.removeEventListener("unmute", updateVideoState);
-      track.removeEventListener("mute", updateVideoState);
-    });
+    // Wait one frame so the browser can update the remote track's muted state.
+    const frame = window.requestAnimationFrame(updateVideoState);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      videoTracks.forEach((track) => {
+        track.removeEventListener("unmute", updateVideoState);
+        track.removeEventListener("mute", updateVideoState);
+        track.removeEventListener("ended", updateVideoState);
+      });
+    };
   }, [remoteStream]);
 
   return (
     <div className={`relative flex h-full w-full min-h-0 items-center justify-center overflow-hidden rounded-lg bg-zoom-room-tile ${className ?? ""}`}>
       {local && !videoOff ? <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" /> : !local && remoteStream ? <>
-        <video ref={remoteVideoRef} autoPlay playsInline className={hasRemoteVideo && remoteVideoReady ? "absolute inset-0 h-full w-full object-cover" : "hidden"} />
-        {(!hasRemoteVideo || !remoteVideoReady) && <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#414141] text-2xl font-semibold text-white">{initials(name)}</div>}
+        <video ref={remoteVideoRef} autoPlay playsInline className={hasRemoteVideo && readyRemoteStream === remoteStream ? "absolute inset-0 h-full w-full object-cover" : "hidden"} />
+        {(!hasRemoteVideo || readyRemoteStream !== remoteStream) && <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#414141] text-2xl font-semibold text-white">{initials(name)}</div>}
       </> : (
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#414141] text-2xl font-semibold text-white">{initials(name)}</div>
       )}
@@ -136,6 +143,8 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
   useEffect(() => {
     const savedId = Number(sessionStorage.getItem(`meeting-participant:${code}`));
     if (savedId > 0) {
+      // The participant ID exists only in this browser session.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setParticipantId(savedId);
       setRole(sessionStorage.getItem(`meeting-role:${code}`) === "host" ? "host" : "participant");
     } else {
@@ -147,6 +156,8 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
     if (!muteAllVersion) return;
     muteAllRef.current = true;
     stopLocalTrack("audio");
+    // This state change reflects a message received from the host over WebSocket.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMuted(true);
   }, [muteAllVersion]);
 
@@ -204,13 +215,11 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
 
   useEffect(() => {
     chatOpenRef.current = sidePanel === "chat";
-    if (sidePanel === "chat") setUnread(0);
   }, [sidePanel]);
 
   useEffect(() => {
     if (sidePanel !== "chat") return;
     let active = true;
-    setChatError("");
     getMeetingMessages(code).then((history) => {
       if (!active) return;
       setMessages((current) => {
@@ -420,7 +429,14 @@ export default function MeetingRoom({ code, displayName }: { code: string; displ
         <button type="button" aria-label={muted ? "Unmute" : "Mute"} onClick={toggleMute} className={`flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:px-2 sm:gap-1.5 sm:text-xs ${muted ? "text-red-300" : ""}`}><span className={`relative p-1.5 ${muted ? "text-red-400" : ""}`}><MicIcon crossed={muted} />{muted && <span className="absolute inset-1.5 rounded-sm border-r-2 border-red-500" />}</span><span className="hidden sm:inline">{muted ? "Unmute" : "Mute"}</span></button>
         <button type="button" aria-label={videoOff ? "Start Video" : "Stop Video"} onClick={toggleVideo} className={`flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:px-2 sm:gap-1.5 sm:text-xs ${videoOff ? "text-red-300" : ""}`}><span className={`relative p-1.5 ${videoOff ? "text-red-400" : ""}`}><CameraIcon crossed={videoOff} />{videoOff && <span className="absolute inset-1.5 rounded-sm border-r-2 border-red-500" />}</span><span className="hidden sm:inline">{videoOff ? "Start Video" : "Stop Video"}</span></button>
         <button type="button" aria-label="Participants" onClick={() => setSidePanel(sidePanel === "participants" ? null : "participants")} className="relative flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:px-2 sm:gap-1.5 sm:text-xs"><span className="p-1.5"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="9" cy="8" r="3" /><path d="M3 20v-2a6 6 0 0 1 12 0v2m2-9a3 3 0 1 0 0-6m1 10a5 5 0 0 1 3 5" /></svg><span className="absolute right-0 top-1 rounded-full bg-[#484848] px-1 text-[9px]">{panelPeople.length}</span></span><span className="hidden sm:inline">Participants</span></button>
-        <button type="button" aria-label="Chat" onClick={() => setSidePanel(sidePanel === "chat" ? null : "chat")} className="relative flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:px-2 sm:gap-1.5 sm:text-xs"><span className="p-1.5"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z" /></svg></span><span className="hidden sm:inline">Chat</span>{unread > 0 && sidePanel !== "chat" && <span className="absolute right-0 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{unread}</span>}</button>
+        <button type="button" aria-label="Chat" onClick={() => {
+          const opening = sidePanel !== "chat";
+          if (opening) {
+            setUnread(0);
+            setChatError("");
+          }
+          setSidePanel(opening ? "chat" : null);
+        }} className="relative flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] text-white transition hover:bg-zoom-room-tile sm:min-w-[76px] sm:px-2 sm:gap-1.5 sm:text-xs"><span className="p-1.5"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z" /></svg></span><span className="hidden sm:inline">Chat</span>{unread > 0 && sidePanel !== "chat" && <span className="absolute right-0 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{unread}</span>}</button>
         <button type="button" aria-label={screenStream ? "Stop Share" : "Share Screen"} onClick={toggleScreenShare} className={`flex min-w-[46px] flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] transition hover:bg-zoom-room-tile sm:min-w-[84px] sm:px-2 sm:gap-1.5 sm:text-xs ${screenStream ? "text-green-300" : "text-white"}`}><span className="p-1.5 text-green-400"><ScreenIcon /></span><span className="hidden sm:inline">{screenStream ? "Stop Share" : "Share Screen"}</span></button>
         </div>
         <button type="button" onClick={handleLeave} className="ml-auto rounded-lg bg-zoom-red px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-red-700 sm:px-6 sm:text-sm">Leave</button>

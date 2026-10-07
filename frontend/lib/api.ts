@@ -34,7 +34,12 @@ type MeetingInput = {
   duration_minutes: number;
 };
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
+function getApiUrl() {
+  if (!API_URL) throw new Error("NEXT_PUBLIC_API_URL is not set");
+  return API_URL;
+}
 
 class ApiError extends Error {
   status: number;
@@ -47,7 +52,7 @@ class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, options);
+  const response = await fetch(`${getApiUrl()}${path}`, options);
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -102,7 +107,7 @@ export function getMeetingMessages(code: string) {
 }
 
 export function getMeetingWebSocketUrl(code: string, participantId: number) {
-  const url = new URL(API_URL);
+  const url = new URL(getApiUrl());
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.pathname = `/ws/meetings/${encodeURIComponent(code)}`;
   url.searchParams.set("participant_id", String(participantId));

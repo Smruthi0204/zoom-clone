@@ -21,7 +21,7 @@ function TileIcon({ kind }: { kind: "video" | "join" | "calendar" }) {
 function extractMeetingCode(input: string) {
   const value = input.trim();
 
-  // Read invite IDs from the path so digits in localhost:3000 are ignored.
+  // Read IDs from the path so digits in the invite host or port are ignored.
   if (/^https?:\/\//i.test(value)) {
     try {
       const pathPart = new URL(value).pathname.split("/").filter(Boolean).map(decodeURIComponent)
@@ -159,6 +159,8 @@ export default function Home() {
     window.addEventListener("meeting-search", handleSearch);
     const message = sessionStorage.getItem("dashboard-message");
     if (message) {
+      // Session storage is read after mount to avoid accessing it during server rendering.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRoomMessage(message);
       sessionStorage.removeItem("dashboard-message");
     }

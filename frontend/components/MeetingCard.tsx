@@ -10,8 +10,7 @@ function formatMeetingCode(code: string) {
 
 export default function MeetingCard({ meeting }: { meeting: Meeting }) {
   const [copied, setCopied] = useState(false);
-  const [dateLabel, setDateLabel] = useState("");
-  const [timeRange, setTimeRange] = useState("");
+  const [labels, setLabels] = useState({ date: "", time: "" });
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
 
@@ -20,8 +19,12 @@ export default function MeetingCard({ meeting }: { meeting: Meeting }) {
     const start = new Date(meeting.start_time);
     const end = new Date(start.getTime() + meeting.duration_minutes * 60_000);
     const options: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-    setDateLabel(start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }));
-    setTimeRange(`${start.toLocaleTimeString(undefined, options)} - ${end.toLocaleTimeString(undefined, options)}`);
+    // Format after mount because local timezone can differ from the build server.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLabels({
+      date: start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }),
+      time: `${start.toLocaleTimeString(undefined, options)} - ${end.toLocaleTimeString(undefined, options)}`,
+    });
   }, [meeting.start_time, meeting.duration_minutes]);
 
   async function copyInvite() {
@@ -47,8 +50,8 @@ export default function MeetingCard({ meeting }: { meeting: Meeting }) {
   return (
     <article className="grid gap-3 px-4 py-4 transition hover:bg-zoom-panel md:grid-cols-[150px_minmax(0,1fr)_auto] md:items-center md:px-5">
       <div className="text-sm font-medium text-zoom-muted">
-        <p>{timeRange}</p>
-        <p className="mt-1 text-xs font-normal text-zoom-muted">{dateLabel}</p>
+        <p>{labels.time}</p>
+        <p className="mt-1 text-xs font-normal text-zoom-muted">{labels.date}</p>
       </div>
       <div className="min-w-0">
         <h3 className="truncate text-sm font-semibold text-zoom-heading">{meeting.title}</h3>

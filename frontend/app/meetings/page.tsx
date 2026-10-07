@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import MeetingCard from "@/components/MeetingCard";
 import Navbar from "@/components/Navbar";
@@ -42,7 +43,7 @@ export default function MeetingsPage() {
       <div className="flex min-h-[calc(100vh-56px)]">
         <Sidebar current="Meetings" />
         <main className="mx-auto w-full max-w-[1440px] px-6 py-8 sm:px-8 lg:px-12 lg:py-10">
-          <div className="flex flex-wrap items-center justify-between gap-4"><h1 className="text-2xl font-semibold tracking-tight text-zoom-heading">Meetings</h1><a href="/" className="rounded-lg bg-zoom-blue px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zoom-blue-hover">Schedule a meeting</a></div>
+          <div className="flex flex-wrap items-center justify-between gap-4"><h1 className="text-2xl font-semibold tracking-tight text-zoom-heading">Meetings</h1><Link href="/" className="rounded-lg bg-zoom-blue px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zoom-blue-hover">Schedule a meeting</Link></div>
           <div className="mt-6 flex gap-7 border-b border-zoom-border">
             {(["upcoming", "previous"] as const).map((item) => <button key={item} onClick={() => setTab(item)} className={`border-b-2 px-1 pb-3 text-sm font-semibold capitalize transition ${tab === item ? "border-zoom-blue text-zoom-blue" : "border-transparent text-zoom-muted hover:text-zoom-heading"}`}>{item === "previous" ? "Previous" : "Upcoming"}</button>)}
           </div>

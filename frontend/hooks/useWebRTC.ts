@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { getMeetingWebSocketUrl, type ChatMessage } from "@/lib/api";
 
+// Keep the connection configuration in one place; production can add TURN later.
+const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+
 export default function useWebRTC(
   code: string,
   participantId: number | null,
@@ -21,9 +24,6 @@ export default function useWebRTC(
   const [connected, setConnected] = useState(false);
   const [muteAllVersion, setMuteAllVersion] = useState(0);
   const [removedVersion, setRemovedVersion] = useState(0);
-
-  localStreamRef.current = localStream;
-  screenTrackRef.current = screenTrack;
 
   async function syncLocalTracks(connection: RTCPeerConnection) {
     const tracks = localStreamRef.current?.getTracks() ?? [];
@@ -56,6 +56,8 @@ export default function useWebRTC(
   }
 
   useEffect(() => {
+    localStreamRef.current = localStream;
+    screenTrackRef.current = screenTrack;
     // Send null tracks too, so mute and camera-off reach existing peers.
     connectionsRef.current.forEach((connection) => { syncLocalTracks(connection).catch(() => {}); });
   }, [localStream, screenTrack]);
@@ -81,9 +83,7 @@ export default function useWebRTC(
       const existing = connectionsRef.current.get(peerId);
       if (existing) return existing;
 
-      const connection = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-      });
+      const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       // Reserve both senders so a camera track can arrive after the offer.
       connection.addTransceiver("audio", { direction: "sendrecv" });
       connection.addTransceiver("video", { direction: "sendrecv" });
